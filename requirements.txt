@@ -2,4 +2,4 @@ colorlog==6.10.1
 homeassistant==2026.3.0b2
 pip>=21.3.1
 ruff==0.14.14
-prek==0.3.0
+prek==0.3.4
