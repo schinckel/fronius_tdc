@@ -5,13 +5,14 @@
     "@schinckel"
   ],
   "config_flow": true,
+  "dependencies": [],
   "documentation": "https://github.com/schinckel/fronius_tdc",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/schinckel/fronius_tdc/issues",
-  "integration_type": "device",
-  "version": "0.1.0",
   "requirements": [
     "beautifulsoup4",
     "requests"
-  ]
+  ],
+  "version": "0.1.0"
 }
