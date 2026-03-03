@@ -14,9 +14,14 @@ Home Assistant integration for controlling Fronius Gen24 inverters with Time of 
 ### Via HACS (Home Assistant Community Store)
 
 1. Open HACS in Home Assistant
-2. Go to "Integrations"
-3. Search for "Fronius Gen24 Time Dependent Controls"
-4. Click Install
+2. Click the three-dot menu and select "Custom repositories"
+3. Paste `https://github.com/schinckel/fronius_tdc` in the repository URL field
+4. Select "Integration" as the category
+5. Click Add
+6. Click the close (X) button.
+7. Go to "Integrations"
+8. Search for "Fronius Gen24 Time Dependent Controls"
+9. Click Install
 
 ### Manual Installation
 
