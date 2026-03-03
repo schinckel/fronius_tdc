@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Fronius Gen24 Inverter",
+        "description": "Enter the local IP address and credentials for the inverter web interface. Use the 'customer' or 'technician' account.",
+        "data": {
+          "host":     "IP Address / Hostname",
+          "port":     "HTTP Port (default 80)",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the inverter. Check the IP address and port.",
+      "invalid_auth":   "Invalid username or password."
+    },
+    "abort": {
+      "already_configured": "This inverter is already configured."
+    }
+  }
+}
