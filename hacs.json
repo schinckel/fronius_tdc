@@ -1,5 +1,6 @@
 {
     "name": "Fronius Gen24 Time Dependent Controls",
     "homeassistant": "2026.2.3",
-    "hacs": "2.0.5"
+    "hacs": "2.0.5",
+    "hide_default_branch": true
 }
