@@ -178,3 +178,192 @@ class TestAsyncSetupEntry:
         assert all(isinstance(e, FroniusScheduleSwitch) for e in entities)
         assert entities[0]._index == 0
         assert entities[1]._index == 1
+
+
+class TestSwitchEdgeCases:
+    """Test edge cases and error conditions for switch entities."""
+
+    @pytest.fixture
+    def coordinator_mock(self, mock_schedule_data):
+        """Create a mock coordinator."""
+        coordinator = MagicMock()
+        coordinator.data = mock_schedule_data["timeofuse"]
+        return coordinator
+
+    @pytest.fixture
+    def config_entry_mock(self):
+        """Create a mock config entry."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_123"
+        return entry
+
+    def test_switch_with_empty_weekdays(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test switch with no active weekdays."""
+        coordinator_mock.data = [
+            {
+                "Active": True,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 1000,
+                "TimeTable": {"Start": "10:00", "End": "14:00"},
+                "Weekdays": {
+                    "Mon": False,
+                    "Tue": False,
+                    "Wed": False,
+                    "Thu": False,
+                    "Fri": False,
+                    "Sat": False,
+                    "Sun": False,
+                },
+            }
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        attrs = switch.extra_state_attributes
+
+        assert attrs["days"] == []
+
+    def test_switch_with_all_weekdays_active(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test switch with all weekdays active."""
+        coordinator_mock.data = [
+            {
+                "Active": True,
+                "ScheduleType": "DISCHARGE_MAX",
+                "Power": 2000,
+                "TimeTable": {"Start": "08:00", "End": "18:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": True,
+                    "Sun": True,
+                },
+            }
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        attrs = switch.extra_state_attributes
+
+        assert len(attrs["days"]) == 7
+        assert set(attrs["days"]) == {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+
+    def test_switch_with_zero_power(self, coordinator_mock, config_entry_mock) -> None:
+        """Test switch with zero power value."""
+        coordinator_mock.data = [
+            {
+                "Active": False,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 0,
+                "TimeTable": {"Start": "00:00", "End": "00:00"},
+            }
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        assert switch.name == "Charge Max 0W 00:00-00:00"
+
+    def test_switch_name_with_special_characters_in_time(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test that switch name handles times correctly."""
+        coordinator_mock.data = [
+            {
+                "Active": True,
+                "ScheduleType": "CHARGE_MIN",
+                "Power": 500,
+                "TimeTable": {"Start": "09:30", "End": "17:45"},
+            }
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        assert switch.name == "Charge Min 500W 09:30-17:45"
+
+    def test_switch_coordinator_data_changes(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test switch behavior when coordinator data changes."""
+        coordinator_mock.data = [
+            {"Active": True, "ScheduleType": "CHARGE_MAX", "Power": 3000}
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+
+        initial_is_on = switch.is_on
+        assert initial_is_on is True
+
+        # Simulate coordinator data update
+        coordinator_mock.data = [
+            {"Active": False, "ScheduleType": "CHARGE_MAX", "Power": 3000}
+        ]
+
+        updated_is_on = switch.is_on
+        assert updated_is_on is False
+
+    def test_switch_with_missing_schedule_type(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test switch with missing schedule type."""
+        coordinator_mock.data = [
+            {
+                "Active": True,
+                "Power": 3000,
+                "TimeTable": {"Start": "22:00", "End": "06:00"},
+            }
+        ]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        assert switch.icon == "mdi:battery-clock"
+        assert switch.name == " 3000W 22:00-06:00"
+
+    @pytest.mark.asyncio
+    async def test_switch_turn_on_with_kwargs(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test turn_on with extra kwargs (should be ignored)."""
+        coordinator_mock.async_set_active = AsyncMock()
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+
+        await switch.async_turn_on(extra_param="ignored")
+
+        coordinator_mock.async_set_active.assert_called_once_with(0, active=True)
+
+    @pytest.mark.asyncio
+    async def test_switch_turn_off_with_kwargs(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test turn_off with extra kwargs (should be ignored)."""
+        coordinator_mock.async_set_active = AsyncMock()
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+
+        await switch.async_turn_off(some_kwarg="value")
+
+        coordinator_mock.async_set_active.assert_called_once_with(index=0, active=False)
+
+    def test_switch_device_info_consistent(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test that device info is consistent across switches."""
+        coordinator_mock.data = [
+            {"Active": True, "ScheduleType": "CHARGE_MAX"},
+            {"Active": False, "ScheduleType": "DISCHARGE_MAX"},
+        ]
+
+        switch1 = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
+        switch2 = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 1)
+
+        # Device info should be the same for both
+        assert switch1._attr_device_info == switch2._attr_device_info
+        assert switch1._attr_device_info["identifiers"] == {(DOMAIN, "test_entry_123")}
+
+    def test_switch_unique_id_varies_by_index(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test that unique IDs are different for each switch."""
+        switches = [
+            FroniusScheduleSwitch(coordinator_mock, config_entry_mock, i)
+            for i in range(3)
+        ]
+
+        unique_ids = [switch._attr_unique_id for switch in switches]
+        assert len(set(unique_ids)) == 3  # All unique
+        assert unique_ids[0] == "test_entry_123_schedule_0"
+        assert unique_ids[1] == "test_entry_123_schedule_1"
+        assert unique_ids[2] == "test_entry_123_schedule_2"

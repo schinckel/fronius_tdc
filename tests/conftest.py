@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -89,3 +89,12 @@ def mock_response():
     response.headers = {}
     response.raise_for_status = Mock()
     return response
+
+
+@pytest.fixture
+def hass_mock():
+    """Create a mock HomeAssistant instance for async tests."""
+    hass = AsyncMock()
+    hass.async_add_executor_job = AsyncMock()
+    hass.data = {}
+    return hass
