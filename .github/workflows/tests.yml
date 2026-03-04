@@ -29,9 +29,15 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-          pytest --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing
+          pytest --junitxml=junit.xml -o junit_family=legacy --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
