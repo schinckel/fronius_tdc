@@ -45,7 +45,6 @@ def fronius_request(
 
     if not challenge_header:
         resp.raise_for_status()
-        return resp  # pragma no cover
 
     # Step 3: compute Authorization
     authorization = _build_authorization(
