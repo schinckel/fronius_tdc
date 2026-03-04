@@ -353,6 +353,21 @@ class TestSwitchEdgeCases:
         assert switch1._attr_device_info == switch2._attr_device_info
         assert switch1._attr_device_info["identifiers"] == {(DOMAIN, "test_entry_123")}
 
+    def test_schedule_out_of_range_index(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test switch behavior when index is out of range."""
+        coordinator_mock.data = [{"Active": True, "ScheduleType": "CHARGE_MAX"}]
+        # Create switch with index 5 but only 1 schedule exists
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 5)
+
+        # _schedule should return empty dict
+        assert switch._schedule == {}
+        # name should gracefully handle missing data
+        assert switch.name == " 0W ?-?"
+        # is_on should return False with missing data
+        assert switch.is_on is False
+
     def test_switch_unique_id_varies_by_index(
         self, coordinator_mock, config_entry_mock
     ) -> None:
