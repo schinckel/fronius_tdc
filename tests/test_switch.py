@@ -165,7 +165,7 @@ class TestAsyncSetupEntry:
 
         hass.data = {DOMAIN: {"test_entry": coordinator}}
 
-        async_add_entities = AsyncMock()
+        async_add_entities = MagicMock()
 
         await async_setup_entry(hass, config_entry, async_add_entities)
 

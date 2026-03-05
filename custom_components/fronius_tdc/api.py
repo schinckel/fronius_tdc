@@ -38,8 +38,10 @@ def fronius_request(
         return resp
 
     # Step 2: find challenge header (Fronius uses X-WWW-Authenticate)
-    challenge_header = resp.headers.get("www-authenticate") or resp.headers.get(
-        "x-www-authenticate"
+    challenge_header = (
+        resp.headers.get("www-authenticate")
+        or resp.headers.get("x-www-authenticate")
+        or ""
     )
     LOGGER.debug("Challenge header: %s", challenge_header)
 
@@ -48,7 +50,11 @@ def fronius_request(
 
     # Step 3: compute Authorization
     authorization = _build_authorization(
-        method, url, username, password, challenge_header
+        method,
+        url,
+        username,
+        password,
+        challenge_header,
     )
 
     # Step 4: retry with Authorization header
@@ -58,7 +64,7 @@ def fronius_request(
     LOGGER.debug(
         "Step 2 (authenticated) — %s %s → HTTP %s", method, url, resp.status_code
     )
-    LOGGER.debug("Step 2 response body: %s", resp.text[:400])
+    LOGGER.debug("Step 2 response body: %s", resp.text[:800])
     resp.raise_for_status()
     return resp
 

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
 
+from .batteries_coordinator import FroniusBatteriesCoordinator
 from .const import DOMAIN, LOGGER
 from .tdc_coordinator import FroniusTDCCoordinator
 
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
 
 PLATFORMS: list[Platform] = [
     Platform.SWITCH,
+    Platform.NUMBER,
+    Platform.SELECT,
 ]
 
 
@@ -29,15 +32,29 @@ async def async_setup_entry(
     entry: ConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
-    coordinator = FroniusTDCCoordinator(
+    hass.data.setdefault(DOMAIN, {})
+
+    # Set up TOU coordinator
+    tdc_coordinator = FroniusTDCCoordinator(
         hass=hass,
         logger=LOGGER,
         config_entry=entry,
     )
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    hass.data[DOMAIN][entry.entry_id] = tdc_coordinator
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    await coordinator.async_config_entry_first_refresh()
+    await tdc_coordinator.async_config_entry_first_refresh()
+
+    # Set up Batteries coordinator
+    batteries_coordinator = FroniusBatteriesCoordinator(
+        hass=hass,
+        logger=LOGGER,
+        config_entry=entry,
+    )
+    hass.data[DOMAIN].setdefault("batteries_coordinator", {})[entry.entry_id] = (
+        batteries_coordinator
+    )
+    await batteries_coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
