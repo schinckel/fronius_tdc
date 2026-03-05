@@ -9,7 +9,7 @@ import requests
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.fronius_tdc.coordinator import (
+from custom_components.fronius_tdc.tdc_coordinator import (
     FroniusTDCCoordinator,
     _strip_meta,
 )
@@ -85,7 +85,7 @@ class TestFroniusTDCCoordinator:
             logger=MagicMock(),
         )
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_blocking_get(self, mock_get, coordinator, mock_schedule_data) -> None:
         """Test _blocking_get method."""
         mock_get.return_value = mock_schedule_data
@@ -98,7 +98,7 @@ class TestFroniusTDCCoordinator:
         assert "_Id" not in result[0]  # Meta fields stripped
         mock_get.assert_called_once()
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_post_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     def test_blocking_post(self, mock_post, coordinator) -> None:
         """Test _blocking_post method."""
         schedules = [
@@ -113,7 +113,7 @@ class TestFroniusTDCCoordinator:
         assert call_args[0][0] == coordinator._url
         assert call_args[0][3] == {"timeofuse": schedules}
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_blocking_get_with_metadata_stripping(self, mock_get, coordinator) -> None:
         """Test that _blocking_get strips metadata fields."""
         raw_data = {
@@ -130,7 +130,7 @@ class TestFroniusTDCCoordinator:
         assert "_Id" not in result[0]
         assert "_Meta" not in result[0]
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_connection_error_handling(self, mock_get, coordinator) -> None:
         """Test that connection errors are handled properly."""
         mock_get.side_effect = requests.ConnectionError("Cannot reach host")
@@ -138,7 +138,7 @@ class TestFroniusTDCCoordinator:
         with pytest.raises(requests.ConnectionError):
             coordinator._blocking_get()
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_http_error_handling(self, mock_get, coordinator) -> None:
         """Test that HTTP errors are handled properly."""
         error = requests.HTTPError("401 Unauthorized")
@@ -147,7 +147,7 @@ class TestFroniusTDCCoordinator:
         with pytest.raises(requests.HTTPError):
             coordinator._blocking_get()
 
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_test_connection_blocking(
         self, mock_get, coordinator, mock_schedule_data
     ) -> None:
@@ -214,7 +214,7 @@ class TestCoordinatorAsyncOperations:
         )
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     async def test_async_update_data_timeout_handling(
         self, mock_get, coordinator_with_hass
     ):
@@ -225,7 +225,7 @@ class TestCoordinatorAsyncOperations:
             await coordinator_with_hass._async_update_data()
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     async def test_async_update_data_http_error(self, mock_get, coordinator_with_hass):
         """Test that HTTP errors during update are handled properly."""
         mock_get.side_effect = requests.HTTPError("500 Server Error")
@@ -234,7 +234,7 @@ class TestCoordinatorAsyncOperations:
             await coordinator_with_hass._async_update_data()
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     async def test_async_update_data_success(
         self, mock_get, coordinator_with_hass, mock_schedule_data
     ):
@@ -248,7 +248,7 @@ class TestCoordinatorAsyncOperations:
         assert "_Id" not in result[0]
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_post_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_to_true(
         self, mock_post, coordinator_with_hass, mock_schedule_data
     ):
@@ -264,7 +264,7 @@ class TestCoordinatorAsyncOperations:
         coordinator_with_hass.async_refresh.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_post_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_to_false(
         self, mock_post, coordinator_with_hass, mock_schedule_data
     ):
@@ -291,7 +291,7 @@ class TestCoordinatorAsyncOperations:
         # Method should return early without raising; async_refresh should not be called
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_post_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_request_error(
         self, mock_post, coordinator_with_hass, mock_schedule_data
     ):
@@ -303,7 +303,7 @@ class TestCoordinatorAsyncOperations:
             await coordinator_with_hass.async_set_active(0, active=True)
 
     @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.coordinator.fronius_post_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_preserves_other_schedules(
         self, mock_post, coordinator_with_hass, mock_schedule_data
     ):

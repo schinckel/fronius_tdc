@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from homeassistant.const import Platform
 
 from .const import DOMAIN, LOGGER
-from .coordinator import FroniusTDCCoordinator
+from .tdc_coordinator import FroniusTDCCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
