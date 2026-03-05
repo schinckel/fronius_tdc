@@ -29,7 +29,7 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-          pytest --junitxml=junit.xml -o junit_family=legacy --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing
+          pytest --junitxml=junit.xml -o junit_family=legacy --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing --cov-branch
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v5

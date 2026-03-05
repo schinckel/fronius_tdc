@@ -13,7 +13,7 @@ node_modules
 .vscode
 coverage.xml
 .ruff_cache
-
+junit.xml
 
 # Home Assistant configuration
 config/*
