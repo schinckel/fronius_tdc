@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SCHEDULE_TYPE_LABELS
-from .coordinator import FroniusTDCCoordinator
+from .tdc_coordinator import FroniusTDCCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ async def async_setup_entry(
         FroniusScheduleSwitch(coordinator, entry, index)
         for index in range(len(coordinator.data or []))
     ]
-    async_add_entities(entities)
+    await async_add_entities(entities)
 
 
 class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEntity):
