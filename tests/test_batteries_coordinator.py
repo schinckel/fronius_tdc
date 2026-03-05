@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import requests
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.fronius_tdc.batteries_coordinator import (
     FroniusBatteriesCoordinator,
@@ -239,3 +240,156 @@ class TestFroniusBatteriesCoordinator:
         ):
             result = coordinator.test_connection_blocking()
             assert result == {"HYB_EVU_CHARGEFROMGRID": True}
+
+    @pytest.mark.asyncio
+    async def test_async_set_switch_with_request_exception(self, coordinator) -> None:
+        """Test async_set_switch raises UpdateFailed on RequestException."""
+        coordinator.data = {"HYB_EVU_CHARGEFROMGRID": False}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(
+                coordinator,
+                "_blocking_post",
+                side_effect=requests.ConnectionError("Connection error"),
+            ),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+
+            with pytest.raises(UpdateFailed) as exc_info:
+                await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
+
+            assert "Failed to set HYB_EVU_CHARGEFROMGRID to True" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_async_set_number_with_request_exception(self, coordinator) -> None:
+        """Test async_set_number raises UpdateFailed on RequestException."""
+        coordinator.data = {"HYB_EM_POWER": 3000}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(
+                coordinator,
+                "_blocking_post",
+                side_effect=requests.Timeout("Request timeout"),
+            ),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+
+            with pytest.raises(UpdateFailed) as exc_info:
+                await coordinator.async_set_number("HYB_EM_POWER", 5000)
+
+            assert "Failed to set HYB_EM_POWER to 5000" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_async_set_select_with_request_exception(self, coordinator) -> None:
+        """Test async_set_select raises UpdateFailed on RequestException."""
+        coordinator.data = {"HYB_EM_MODE": 0}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(
+                coordinator,
+                "_blocking_post",
+                side_effect=requests.HTTPError("401 Unauthorized"),
+            ),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+
+            with pytest.raises(UpdateFailed) as exc_info:
+                await coordinator.async_set_select("HYB_EM_MODE", 1)
+
+            assert "Failed to set HYB_EM_MODE to 1" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_async_set_switch_calls_refresh(self, coordinator) -> None:
+        """Test async_set_switch calls async_refresh after successful update."""
+        coordinator.data = {"HYB_EVU_CHARGEFROMGRID": False}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(coordinator, "_blocking_post"),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+            await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
+
+            # Verify refresh was called after successful update
+            coordinator.async_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_set_number_calls_refresh(self, coordinator) -> None:
+        """Test async_set_number calls async_refresh after successful update."""
+        coordinator.data = {"HYB_EM_POWER": 3000}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(coordinator, "_blocking_post"),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+            await coordinator.async_set_number("HYB_EM_POWER", 5000)
+
+            # Verify refresh was called after successful update
+            coordinator.async_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_set_select_calls_refresh(self, coordinator) -> None:
+        """Test async_set_select calls async_refresh after successful update."""
+        coordinator.data = {"HYB_EM_MODE": 0}
+        coordinator.async_refresh = AsyncMock()
+
+        with (
+            patch.object(coordinator, "_blocking_post"),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+            await coordinator.async_set_select("HYB_EM_MODE", 1)
+
+            # Verify refresh was called after successful update
+            coordinator.async_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_with_exception(self, coordinator) -> None:
+        """Test _async_update_data raises UpdateFailed on RequestException."""
+        with (
+            patch.object(
+                coordinator,
+                "_blocking_get",
+                side_effect=requests.ConnectionError("Connection error"),
+            ),
+            patch.object(
+                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+            ) as mock_executor,
+        ):
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+
+            with pytest.raises(UpdateFailed) as exc_info:
+                await coordinator._async_update_data()
+
+            assert "Cannot reach Fronius inverter" in str(exc_info.value)
+
+    @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_get_json")
+    def test_blocking_get_with_connection_error_raises(
+        self, mock_get, coordinator
+    ) -> None:
+        """Test _blocking_get raises ConnectionError."""
+        mock_get.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(requests.ConnectionError):
+            coordinator._blocking_get()
