@@ -21,8 +21,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Min/max constraints for numeric keys (may need adjustment based on device)
 NUMBER_MIN_MAX = {
-    "HYB_EM_POWER": (0, 10000),  # Example: 0-10000W, adjust as needed
-    "HYB_BM_PACMIN": (0, 10000),  # Example: 0-10000W, adjust as needed
+    "HYB_EM_POWER": (-200000, 200000),  # Negative means export, positive means import
+    "HYB_BM_PACMIN": (-200000, 0),  # Must be negative
     "HYB_BACKUP_CRITICALSOC": (0, 100),  # Percentage
     "HYB_BACKUP_RESERVED": (0, 100),  # Percentage
     "BAT_M0_SOC_MAX": (0, 100),  # Percentage

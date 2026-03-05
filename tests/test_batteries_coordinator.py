@@ -118,17 +118,12 @@ class TestFroniusBatteriesCoordinator:
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_post_json")
     def test_blocking_post(self, mock_post, coordinator) -> None:
         """Test _blocking_post method."""
-        config = {
-            "HYB_EVU_CHARGEFROMGRID": True,
-            "HYB_EM_POWER": 5000,
-        }
-
-        coordinator._blocking_post(config)
+        coordinator._blocking_post("HYB_EVU_CHARGEFROMGRID", value=True)
 
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert call_args[0][0] == coordinator._url
-        assert call_args[0][3] == config
+        assert call_args[0][3] == {"HYB_EVU_CHARGEFROMGRID": True}
 
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_get_json")
     def test_blocking_get_with_metadata_stripping(self, mock_get, coordinator) -> None:
@@ -174,10 +169,9 @@ class TestFroniusBatteriesCoordinator:
     def test_blocking_post_http_error(self, mock_post, coordinator) -> None:
         """Test that HTTP errors are raised during POST."""
         mock_post.side_effect = requests.HTTPError("401 Unauthorized")
-        config = {"HYB_EVU_CHARGEFROMGRID": True}
 
         with pytest.raises(requests.HTTPError):
-            coordinator._blocking_post(config)
+            coordinator._blocking_post("HYB_EVU_CHARGEFROMGRID", value=True)
 
     @pytest.mark.asyncio
     async def test_async_set_switch(self, coordinator) -> None:
@@ -193,9 +187,10 @@ class TestFroniusBatteriesCoordinator:
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
-            # Verify the config was updated
+            # Verify the correct key and value were passed
             call_args = mock_post.call_args
-            assert call_args[0][0]["HYB_EVU_CHARGEFROMGRID"] is True
+            assert call_args[0][0] == "HYB_EVU_CHARGEFROMGRID"
+            assert call_args[0][1] is True
 
     @pytest.mark.asyncio
     async def test_async_set_number(self, coordinator) -> None:
@@ -211,9 +206,10 @@ class TestFroniusBatteriesCoordinator:
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_number("HYB_EM_POWER", 5000)
-            # Verify the config was updated
+            # Verify the correct key and value were passed
             call_args = mock_post.call_args
-            assert call_args[0][0]["HYB_EM_POWER"] == 5000
+            assert call_args[0][0] == "HYB_EM_POWER"
+            assert call_args[0][1] == 5000
 
     @pytest.mark.asyncio
     async def test_async_set_select(self, coordinator) -> None:
@@ -229,9 +225,10 @@ class TestFroniusBatteriesCoordinator:
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_select("HYB_EM_MODE", 1)
-            # Verify the config was updated
+            # Verify the correct key and value were passed
             call_args = mock_post.call_args
-            assert call_args[0][0]["HYB_EM_MODE"] == 1
+            assert call_args[0][0] == "HYB_EM_MODE"
+            assert call_args[0][1] == 1
 
     def test_test_connection_blocking(self, coordinator) -> None:
         """Test test_connection_blocking method."""
