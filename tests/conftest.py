@@ -2,36 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock
-
 import pytest
-
-from custom_components.fronius_tdc.const import (
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-    DEFAULT_PORT,
-    DOMAIN,
-)
-
-
-@pytest.fixture
-def mock_config_entry():
-    """Return a mock config entry."""
-    return {
-        "entry_id": "test_entry_123",
-        "domain": DOMAIN,
-        "title": "Fronius Gen24 (192.168.1.1)",
-        "data": {
-            CONF_HOST: "192.168.1.1",
-            CONF_PORT: DEFAULT_PORT,
-            CONF_USERNAME: "customer",
-            CONF_PASSWORD: "password",
-        },
-        "options": {},
-        "version": 1,
-    }
 
 
 @pytest.fixture
@@ -79,22 +50,3 @@ def mock_schedule_data():
             },
         ]
     }
-
-
-@pytest.fixture
-def mock_response():
-    """Return a mock HTTP response."""
-    response = Mock()
-    response.status_code = 200
-    response.headers = {}
-    response.raise_for_status = Mock()
-    return response
-
-
-@pytest.fixture
-def hass_mock():
-    """Create a mock HomeAssistant instance for async tests."""
-    hass = AsyncMock()
-    hass.async_add_executor_job = AsyncMock()
-    hass.data = {}
-    return hass

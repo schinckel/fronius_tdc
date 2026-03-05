@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.fronius_tdc.const import DOMAIN
 from custom_components.fronius_tdc.switch import (
+    FroniusBatterySwitch,
     FroniusScheduleSwitch,
     async_setup_entry,
 )
@@ -178,6 +179,102 @@ class TestAsyncSetupEntry:
         assert all(isinstance(e, FroniusScheduleSwitch) for e in entities)
         assert entities[0]._index == 0
         assert entities[1]._index == 1
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_with_battery_coordinator(self) -> None:
+        """Test setup entry creates battery switch entities."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        # Setup TOU coordinator
+        tdc_coordinator = MagicMock()
+        tdc_coordinator.async_config_entry_first_refresh = AsyncMock()
+        tdc_coordinator.data = []
+
+        # Setup battery coordinator
+        battery_coordinator = MagicMock()
+        battery_coordinator.async_config_entry_first_refresh = AsyncMock()
+        battery_coordinator.data = {
+            "HYB_EVU_CHARGEFROMGRID": True,
+            "HYB_BM_CHARGEFROMAC": False,
+        }
+
+        hass.data = {
+            DOMAIN: {
+                "test_entry": tdc_coordinator,
+                "batteries_coordinator": {"test_entry": battery_coordinator},
+            }
+        }
+
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        # Verify both coordinators were refreshed
+        tdc_coordinator.async_config_entry_first_refresh.assert_called_once()
+        battery_coordinator.async_config_entry_first_refresh.assert_called_once()
+
+        # Check that entities were created (2 schedules + 2 battery switches)
+        entities = async_add_entities.call_args[0][0]
+        battery_switches = [e for e in entities if isinstance(e, FroniusBatterySwitch)]
+        assert len(battery_switches) == 2
+        assert all(isinstance(e, FroniusBatterySwitch) for e in battery_switches)
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_no_battery_coordinator(self) -> None:
+        """Test setup entry when battery coordinator is missing."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        coordinator = MagicMock()
+        coordinator.async_config_entry_first_refresh = AsyncMock()
+        coordinator.data = []
+
+        hass.data = {DOMAIN: {"test_entry": coordinator}}
+
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        # Should still be called, just with fewer entities
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        # Should only have TOU entities (none in this case)
+        assert all(isinstance(e, FroniusScheduleSwitch) for e in entities)
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_battery_with_no_data(self) -> None:
+        """Test setup entry when battery coordinator has no data."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        tdc_coordinator = MagicMock()
+        tdc_coordinator.async_config_entry_first_refresh = AsyncMock()
+        tdc_coordinator.data = []
+
+        battery_coordinator = MagicMock()
+        battery_coordinator.async_config_entry_first_refresh = AsyncMock()
+        battery_coordinator.data = {}  # Empty data
+
+        hass.data = {
+            DOMAIN: {
+                "test_entry": tdc_coordinator,
+                "batteries_coordinator": {"test_entry": battery_coordinator},
+            }
+        }
+
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        # Should be called with empty list since no battery data exists
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        battery_switches = [e for e in entities if isinstance(e, FroniusBatterySwitch)]
+        assert len(battery_switches) == 0
 
 
 class TestSwitchEdgeCases:
@@ -382,3 +479,125 @@ class TestSwitchEdgeCases:
         assert unique_ids[0] == "test_entry_123_schedule_0"
         assert unique_ids[1] == "test_entry_123_schedule_1"
         assert unique_ids[2] == "test_entry_123_schedule_2"
+
+
+class TestFroniusBatterySwitch:
+    """Test FroniusBatterySwitch battery configuration entity."""
+
+    @pytest.fixture
+    def battery_coordinator_mock(self):
+        """Create a mock battery coordinator."""
+        coordinator = MagicMock()
+        coordinator.data = {
+            "HYB_EVU_CHARGEFROMGRID": True,
+            "HYB_BM_CHARGEFROMAC": False,
+        }
+        return coordinator
+
+    @pytest.fixture
+    def config_entry_mock(self):
+        """Create a mock config entry."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_123"
+        return entry
+
+    @pytest.fixture
+    def battery_switch(self, battery_coordinator_mock, config_entry_mock):
+        """Create a battery switch entity."""
+        return FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
+        )
+
+    def test_battery_switch_initialization(self, battery_switch) -> None:
+        """Test battery switch initialization."""
+        assert battery_switch._key == "HYB_EVU_CHARGEFROMGRID"
+        assert (
+            battery_switch._attr_unique_id
+            == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
+        )
+        assert battery_switch._attr_device_info["manufacturer"] == "Fronius"
+        assert battery_switch._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
+
+    def test_battery_switch_name(self, battery_switch) -> None:
+        """Test battery switch name from labels."""
+        assert battery_switch.name == "Charge From Grid"
+
+    def test_battery_switch_name_fallback(
+        self, battery_coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test battery switch name falls back to title case."""
+        switch = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "UNKNOWN_KEY"
+        )
+        assert switch.name == "Unknown Key"
+
+    def test_battery_switch_is_on_true(self, battery_switch) -> None:
+        """Test is_on property when True."""
+        assert battery_switch.is_on is True
+
+    def test_battery_switch_is_on_false(
+        self, battery_coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test is_on property when False."""
+        switch = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC"
+        )
+        assert switch.is_on is False
+
+    def test_battery_switch_is_on_missing_key(
+        self, battery_coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test is_on returns False when key is missing."""
+        switch = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "MISSING_KEY"
+        )
+        assert switch.is_on is False
+
+    def test_battery_switch_is_on_none_data(
+        self, battery_coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test is_on returns False when coordinator data is None."""
+        battery_coordinator_mock.data = None
+        switch = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
+        )
+        assert switch.is_on is False
+
+    @pytest.mark.asyncio
+    async def test_battery_switch_async_turn_on(self, battery_switch) -> None:
+        """Test turning on a battery switch."""
+        battery_switch.coordinator.async_set_switch = AsyncMock()
+
+        await battery_switch.async_turn_on()
+
+        battery_switch.coordinator.async_set_switch.assert_called_once_with(
+            "HYB_EVU_CHARGEFROMGRID", value=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_battery_switch_async_turn_off(self, battery_switch) -> None:
+        """Test turning off a battery switch."""
+        battery_switch.coordinator.async_set_switch = AsyncMock()
+
+        await battery_switch.async_turn_off()
+
+        battery_switch.coordinator.async_set_switch.assert_called_once_with(
+            "HYB_EVU_CHARGEFROMGRID", value=False
+        )
+
+    def test_battery_switch_unique_id_per_key(
+        self, battery_coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test that unique IDs are different for each battery switch key."""
+        switch1 = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
+        )
+        switch2 = FroniusBatterySwitch(
+            battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC"
+        )
+
+        assert switch1._attr_unique_id != switch2._attr_unique_id
+        assert (
+            switch1._attr_unique_id == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
+        )
+        assert switch2._attr_unique_id == "test_entry_123_battery_HYB_BM_CHARGEFROMAC"
