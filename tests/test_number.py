@@ -60,8 +60,8 @@ class TestFroniusBatteryNumber:
         )
         assert power_number._attr_device_info["manufacturer"] == "Fronius"
         assert power_number._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
-        assert power_number._attr_native_min_value == 0
-        assert power_number._attr_native_max_value == 10000
+        assert power_number._attr_native_min_value == -200000
+        assert power_number._attr_native_max_value == 200000
         assert power_number._attr_native_unit_of_measurement == UnitOfPower.WATT
 
     def test_number_initialization_percentage(self, soc_number) -> None:

@@ -99,13 +99,18 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
             return {}
         return config
 
-    def _blocking_post(self, config_dict: dict) -> None:
-        """Write the full battery configuration back to the inverter."""
+    def _blocking_post(self, key: str, *, value: str | bool | float) -> None:
+        """
+        Write a single battery configuration field to the inverter.
+
+        Only sends the specific field being changed, not the entire configuration.
+        """
+        payload = {key: value}
         fronius_post_json(
             self._url,
             self._username,
             self._password,
-            config_dict,
+            payload,
             REQUEST_TIMEOUT,
         )
 
@@ -126,10 +131,8 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
 
     async def async_set_switch(self, key: str, *, value: bool) -> None:
         """Set a boolean config value and update the inverter."""
-        config = dict(self.data or {})
-        config[key] = value
         try:
-            await self.hass.async_add_executor_job(self._blocking_post, config)
+            await self.hass.async_add_executor_job(self._blocking_post, key, value)
         except requests.RequestException as err:
             msg = f"Failed to set {key} to {value}: {err}"
             raise UpdateFailed(msg) from err
@@ -137,10 +140,8 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
 
     async def async_set_number(self, key: str, value: float) -> None:
         """Set a numeric config value and update the inverter."""
-        config = dict(self.data or {})
-        config[key] = value
         try:
-            await self.hass.async_add_executor_job(self._blocking_post, config)
+            await self.hass.async_add_executor_job(self._blocking_post, key, value)
         except requests.RequestException as err:
             msg = f"Failed to set {key} to {value}: {err}"
             raise UpdateFailed(msg) from err
@@ -148,10 +149,8 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
 
     async def async_set_select(self, key: str, value: str | int) -> None:
         """Set a select/enum config value and update the inverter."""
-        config = dict(self.data or {})
-        config[key] = value
         try:
-            await self.hass.async_add_executor_job(self._blocking_post, config)
+            await self.hass.async_add_executor_job(self._blocking_post, key, value)
         except requests.RequestException as err:
             msg = f"Failed to set {key} to {value}: {err}"
             raise UpdateFailed(msg) from err
