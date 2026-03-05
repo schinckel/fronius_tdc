@@ -276,6 +276,38 @@ class TestAsyncSetupEntry:
         battery_switches = [e for e in entities if isinstance(e, FroniusBatterySwitch)]
         assert len(battery_switches) == 0
 
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_no_tou_coordinator(self) -> None:
+        """Test setup entry when TOU coordinator is missing."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        # Setup only battery coordinator, no TOU coordinator
+        battery_coordinator = MagicMock()
+        battery_coordinator.async_config_entry_first_refresh = AsyncMock()
+        battery_coordinator.data = {
+            "HYB_EVU_CHARGEFROMGRID": True,
+            "HYB_BM_CHARGEFROMAC": False,
+        }
+
+        hass.data = {
+            DOMAIN: {
+                "batteries_coordinator": {"test_entry": battery_coordinator},
+            }
+        }
+
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        # Should still be called with battery entities only
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        # Should only have battery switch entities (no TOU)
+        assert all(isinstance(e, FroniusBatterySwitch) for e in entities)
+        assert len(entities) == 2
+
 
 class TestSwitchEdgeCases:
     """Test edge cases and error conditions for switch entities."""
@@ -448,7 +480,7 @@ class TestSwitchEdgeCases:
 
         # Device info should be the same for both
         assert switch1._attr_device_info == switch2._attr_device_info
-        assert switch1._attr_device_info["identifiers"] == {(DOMAIN, "test_entry_123")}
+        assert switch1._attr_device_info["identifiers"] == {(DOMAIN, "test_entry_123")}  # type: ignore  # noqa: PGH003
 
     def test_schedule_out_of_range_index(
         self, coordinator_mock, config_entry_mock
