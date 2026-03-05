@@ -18,13 +18,20 @@ class TestAsyncSetupEntry:
     """Test async_setup_entry function."""
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_async_setup_entry_creates_coordinator(self, mock_coordinator_class):
+    async def test_async_setup_entry_creates_coordinator(
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
+    ):
         """Test that setup creates a coordinator and stores it."""
         # Setup mocks
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -42,14 +49,19 @@ class TestAsyncSetupEntry:
         assert result is True
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
     async def test_async_setup_entry_stores_coordinator_in_hass_data(
-        self, mock_coordinator_class
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
     ):
         """Test that coordinator is stored in hass.data[DOMAIN]."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -64,15 +76,22 @@ class TestAsyncSetupEntry:
 
         # Verify coordinator is stored
         assert DOMAIN in hass.data
-        assert hass.data[DOMAIN]["entry_1"] is mock_coordinator
+        assert hass.data[DOMAIN]["entry_1"] is mock_tdc
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_async_setup_entry_calls_first_refresh(self, mock_coordinator_class):
+    async def test_async_setup_entry_calls_first_refresh(
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
+    ):
         """Test that first_refresh is called during setup."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -86,17 +105,23 @@ class TestAsyncSetupEntry:
         await async_setup_entry(hass, config_entry)
 
         # Verify first_refresh was called
-        mock_coordinator.async_config_entry_first_refresh.assert_called_once()
+        mock_tdc.async_config_entry_first_refresh.assert_called_once()
+        mock_batteries.async_config_entry_first_refresh.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
     async def test_async_setup_entry_forwards_entry_setups(
-        self, mock_coordinator_class
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
     ):
         """Test that entry setup forwards to platforms."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -113,14 +138,19 @@ class TestAsyncSetupEntry:
         hass.config_entries.async_forward_entry_setups.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
     async def test_async_setup_entry_registers_update_listener(
-        self, mock_coordinator_class
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
     ):
         """Test that update listener is registered."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -137,15 +167,26 @@ class TestAsyncSetupEntry:
         config_entry.add_update_listener.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_async_setup_entry_multiple_entries(self, mock_coordinator_class):
+    async def test_async_setup_entry_multiple_entries(
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
+    ):
         """Test setup with multiple config entries."""
-        mock_coordinator1 = AsyncMock()
-        mock_coordinator1.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator2 = AsyncMock()
-        mock_coordinator2.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc1 = AsyncMock()
+        mock_tdc1.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc2 = AsyncMock()
+        mock_tdc2.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.side_effect = [mock_tdc1, mock_tdc2]
 
-        mock_coordinator_class.side_effect = [mock_coordinator1, mock_coordinator2]
+        mock_batteries1 = AsyncMock()
+        mock_batteries1.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries2 = AsyncMock()
+        mock_batteries2.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.side_effect = [
+            mock_batteries1,
+            mock_batteries2,
+        ]
 
         hass = AsyncMock()
         hass.data = {}
@@ -166,8 +207,8 @@ class TestAsyncSetupEntry:
         await async_setup_entry(hass, config_entry2)
 
         # Verify both are stored
-        assert hass.data[DOMAIN]["entry_1"] is mock_coordinator1
-        assert hass.data[DOMAIN]["entry_2"] is mock_coordinator2
+        assert hass.data[DOMAIN]["entry_1"] is mock_tdc1
+        assert hass.data[DOMAIN]["entry_2"] is mock_tdc2
 
 
 class TestAsyncUnloadEntry:
@@ -186,7 +227,7 @@ class TestAsyncUnloadEntry:
 
         assert result is True
         hass.config_entries.async_unload_platforms.assert_called_once_with(
-            config_entry, ["switch"]
+            config_entry, ["switch", "number", "select"]
         )
 
     @pytest.mark.asyncio
@@ -237,12 +278,19 @@ class TestIntegrationLifecycle:
     """Integration tests for the full lifecycle."""
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_full_setup_unload_cycle(self, mock_coordinator_class):
+    async def test_full_setup_unload_cycle(
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
+    ):
         """Test complete setup and unload cycle."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}
@@ -264,12 +312,19 @@ class TestIntegrationLifecycle:
         assert unload_result is True
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_setup_reload_cycle(self, mock_coordinator_class):
+    async def test_setup_reload_cycle(
+        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
+    ):
         """Test setup followed by reload."""
-        mock_coordinator = AsyncMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock()
-        mock_coordinator_class.return_value = mock_coordinator
+        mock_tdc = AsyncMock()
+        mock_tdc.async_config_entry_first_refresh = AsyncMock()
+        mock_tdc_coordinator_class.return_value = mock_tdc
+
+        mock_batteries = AsyncMock()
+        mock_batteries.async_config_entry_first_refresh = AsyncMock()
+        mock_batteries_coordinator_class.return_value = mock_batteries
 
         hass = AsyncMock()
         hass.data = {}

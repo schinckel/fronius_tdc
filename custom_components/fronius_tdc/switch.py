@@ -1,4 +1,4 @@
-"""Switch entities: one per Time of Use schedule entry."""
+"""Switch entities: Time of Use schedules and battery configuration."""
 
 from __future__ import annotations
 
@@ -13,7 +13,13 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SCHEDULE_TYPE_LABELS
+from .batteries_coordinator import FroniusBatteriesCoordinator
+from .const import (
+    BATTERY_CONFIG_KEYS,
+    BATTERY_CONFIG_LABELS,
+    DOMAIN,
+    SCHEDULE_TYPE_LABELS,
+)
 from .tdc_coordinator import FroniusTDCCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,16 +31,52 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up switch entities for one config entry."""
-    coordinator: FroniusTDCCoordinator = hass.data[DOMAIN][entry.entry_id]
+    entities: list[SwitchEntity] = []
 
-    # Wait for first data fetch so we know how many schedules exist
-    await coordinator.async_config_entry_first_refresh()
+    # Set up TOU schedule switches
+    domain_data = hass.data[DOMAIN]
+    tdc_coordinator = domain_data.get(entry.entry_id)
 
-    entities = [
-        FroniusScheduleSwitch(coordinator, entry, index)
-        for index in range(len(coordinator.data or []))
-    ]
-    await async_add_entities(entities)
+    if tdc_coordinator:
+        await tdc_coordinator.async_config_entry_first_refresh()
+        entities.extend(
+            [
+                FroniusScheduleSwitch(tdc_coordinator, entry, index)
+                for index in range(len(tdc_coordinator.data or []))
+            ]
+        )
+
+    # Set up Battery configuration switches (booleans only)
+    batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(
+        entry.entry_id
+    )
+    if batteries_coordinator:
+        await batteries_coordinator.async_config_entry_first_refresh()
+        _LOGGER.debug(
+            "Battery coordinator data available: %s", batteries_coordinator.data
+        )
+
+        # Find all boolean keys for switches
+        boolean_keys = [
+            key
+            for key, platform_type in BATTERY_CONFIG_KEYS.items()
+            if platform_type == "switch"
+        ]
+        battery_switches = [
+            FroniusBatterySwitch(batteries_coordinator, entry, key)
+            for key in boolean_keys
+            if key in (batteries_coordinator.data or {})
+        ]
+        _LOGGER.debug(
+            "Creating %d battery switch entities: %s",
+            len(battery_switches),
+            [e.name for e in battery_switches],
+        )
+        entities.extend(battery_switches)
+    else:
+        _LOGGER.warning("No batteries coordinator found for entry %s", entry.entry_id)
+
+    async_add_entities(entities)
 
 
 class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEntity):
@@ -133,3 +175,46 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         """Turn off the schedule by setting its Active flag to False."""
         # pass both parameters as keywords; the boolean must not be positional
         await self.coordinator.async_set_active(index=self._index, active=False)
+
+
+class FroniusBatterySwitch(
+    CoordinatorEntity[FroniusBatteriesCoordinator], SwitchEntity
+):
+    """Switch for a boolean battery configuration setting."""
+
+    def __init__(
+        self,
+        coordinator: FroniusBatteriesCoordinator,
+        entry: ConfigEntry,
+        key: str,
+    ) -> None:
+        """Initialize the battery switch entity."""
+        super().__init__(coordinator)
+        self._key = key
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_battery_{key}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": "Fronius Gen24 Battery",
+            "manufacturer": "Fronius",
+            "model": "GEN24 Plus / Symo GEN24",
+        }
+
+    @property
+    def name(self) -> str:
+        """Return a human-friendly name for this battery switch."""
+        label_info = BATTERY_CONFIG_LABELS.get(self._key, {})
+        return label_info.get("name", self._key.replace("_", " ").title())
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the battery config key is True, False otherwise."""
+        return bool((self.coordinator.data or {}).get(self._key, False))
+
+    async def async_turn_on(self, **_kwargs: Any) -> None:
+        """Turn on the battery switch."""
+        await self.coordinator.async_set_switch(self._key, value=True)
+
+    async def async_turn_off(self, **_kwargs: Any) -> None:
+        """Turn off the battery switch."""
+        await self.coordinator.async_set_switch(self._key, value=False)
