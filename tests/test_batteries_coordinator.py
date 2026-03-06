@@ -125,6 +125,26 @@ class TestFroniusBatteriesCoordinator:
         assert call_args[0][0] == coordinator._url
         assert call_args[0][3] == {"HYB_EVU_CHARGEFROMGRID": True}
 
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_post_json")
+    async def test_async_set_switch_regression_positional_blocking_post(
+        self, mock_post, coordinator
+    ) -> None:
+        """Regression: executor passes positional args to _blocking_post."""
+        coordinator.data = {"HYB_EVU_CHARGEFROMGRID": False}
+        coordinator.async_refresh = AsyncMock()
+
+        with patch.object(
+            coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
+        ) as mock_executor:
+            mock_executor.side_effect = lambda fn, *args: fn(*args)
+
+            await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
+
+        call_args = mock_post.call_args
+        assert call_args[0][0] == coordinator._url
+        assert call_args[0][3] == {"HYB_EVU_CHARGEFROMGRID": True}
+
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_get_json")
     def test_blocking_get_with_metadata_stripping(self, mock_get, coordinator) -> None:
         """Test that _blocking_get strips metadata fields."""

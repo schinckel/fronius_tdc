@@ -99,7 +99,7 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
             return {}
         return config
 
-    def _blocking_post(self, key: str, *, value: str | bool | float) -> None:
+    def _blocking_post(self, key: str, value: str | bool | float) -> None:  # NOQA: FBT001
         """
         Write a single battery configuration field to the inverter.
 
