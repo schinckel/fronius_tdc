@@ -1,5 +1,7 @@
 Changelog
 
+1.1.1 - 2026-03-07 - Fix error setting values.
+
 1.1.0 - 2026-03-07 - SoC/Self-Consumption tools
         Supports setting options from SoC page and Self-Consumption Optimisation page.
 
