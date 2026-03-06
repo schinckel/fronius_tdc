@@ -5,9 +5,12 @@ Home Assistant integration for controlling Fronius Gen24 inverters with Time of 
 ## Features
 
 - Read and control Time of Use (TOU) schedules
-- Monitor active schedules
-- Enable/disable individual TOU entries
-- Full digest authentication support for Fronius Gen24 web interface
+- Change SoC settings (Battery Reserve, Max Charge, etc)
+- Set self-consumption optimisation target
+
+## Limitations
+
+- Supports only local Customer/Technician username/password authentication, SSO from SolarWeb not supported.
 
 ## Installation
 
