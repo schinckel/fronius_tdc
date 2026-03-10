@@ -1,0 +1,58 @@
+add_schedule:
+  name: Add TOU Schedule
+  description: Add a new time-of-use schedule rule.
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        text:
+    active:
+      required: true
+      selector:
+        boolean:
+    schedule_type:
+      required: true
+      selector:
+        select:
+          options:
+            - CHARGE_MAX
+            - CHARGE_MIN
+            - DISCHARGE_MAX
+            - DISCHARGE_MIN
+    power:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 20000
+          step: 100
+    start:
+      required: true
+      selector:
+        time:
+    end:
+      required: true
+      selector:
+        time:
+    weekdays:
+      required: true
+      selector:
+        object:
+
+remove_schedule:
+  name: Remove TOU Schedule
+  description: Remove an existing time-of-use schedule rule.
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        text:
+    rule_id:
+      required: false
+      selector:
+        text:
+    index:
+      required: false
+      selector:
+        number:
+          min: 0

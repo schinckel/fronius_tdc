@@ -1,6 +1,14 @@
 """Constants for integration_blueprint."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from logging import Logger, getLogger
+
+from homeassistant.components.number import NumberEntityDescription
+from homeassistant.components.select import SelectEntityDescription
+from homeassistant.components.switch import SwitchEntityDescription
+from homeassistant.components.time import TimeEntityDescription
 
 LOGGER: Logger = getLogger(__package__)
 
@@ -24,6 +32,77 @@ SCHEDULE_TYPE_LABELS = {
     "DISCHARGE_MAX": "Discharge Max",
     "DISCHARGE_MIN": "Discharge Min",
 }
+
+SCHEDULE_TYPES = tuple(SCHEDULE_TYPE_LABELS)
+WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+SCHEDULE_POWER_MIN = 0
+SCHEDULE_POWER_MAX = 20000
+SCHEDULE_POWER_STEP = 100
+
+SERVICE_ADD_SCHEDULE = "add_schedule"
+SERVICE_REMOVE_SCHEDULE = "remove_schedule"
+
+
+@dataclass(frozen=True)
+class ScheduleSwitchDescription(SwitchEntityDescription):
+    """Descriptor for per-rule switch entities."""
+
+    weekday: str | None = None
+
+
+@dataclass(frozen=True)
+class ScheduleNumberDescription(NumberEntityDescription):
+    """Descriptor for per-rule number entities."""
+
+    min_value: int = 0
+    max_value: int = 0
+    step: int = 0
+
+
+@dataclass(frozen=True)
+class ScheduleSelectDescription(SelectEntityDescription):
+    """Descriptor for per-rule select entities."""
+
+    options: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ScheduleTimeDescription(TimeEntityDescription):
+    """Descriptor for per-rule time entities."""
+
+    timetable_field: str = ""
+
+
+SCHEDULE_SWITCH_DESCRIPTIONS = (
+    ScheduleSwitchDescription(key="active", name="Active"),
+    *(
+        ScheduleSwitchDescription(key=f"weekday_{day.lower()}", name=day, weekday=day)
+        for day in WEEKDAYS
+    ),
+)
+
+SCHEDULE_NUMBER_DESCRIPTIONS = (
+    ScheduleNumberDescription(
+        key="power",
+        name="Power",
+        min_value=SCHEDULE_POWER_MIN,
+        max_value=SCHEDULE_POWER_MAX,
+        step=SCHEDULE_POWER_STEP,
+    ),
+)
+
+SCHEDULE_SELECT_DESCRIPTIONS = (
+    ScheduleSelectDescription(
+        key="schedule_type",
+        name="Type",
+        options=SCHEDULE_TYPES,
+    ),
+)
+
+SCHEDULE_TIME_DESCRIPTIONS = (
+    ScheduleTimeDescription(key="start", name="Start Time", timetable_field="Start"),
+    ScheduleTimeDescription(key="end", name="End Time", timetable_field="End"),
+)
 
 # Battery configuration keys mapping: key → platform type
 BATTERY_CONFIG_KEYS = {

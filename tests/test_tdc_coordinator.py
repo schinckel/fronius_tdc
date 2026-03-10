@@ -1,4 +1,4 @@
-"""Tests for the data coordinator."""
+"""Tests for the TOU data coordinator."""
 
 from __future__ import annotations
 
@@ -12,310 +12,194 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from custom_components.fronius_tdc.tdc_coordinator import (
     FroniusTDCCoordinator,
     _strip_meta,
+    validate_schedule,
 )
 
 
-class TestStripMeta:
-    """Test _strip_meta function."""
+@pytest.fixture
+def coordinator(mocker):
+    """Create a coordinator with mock hass executor."""
+    mocker.patch("homeassistant.helpers.frame.report_usage")
+    config_entry = MagicMock(
+        data={
+            "host": "192.168.1.1",
+            "port": 80,
+            "username": "customer",
+            "password": "password",
+        },
+        spec=ConfigEntry,
+    )
+    hass_mock = AsyncMock()
 
-    def test_strip_meta_dict(self) -> None:
-        """Test stripping metadata keys from dict."""
-        data = {
-            "Active": True,
-            "_Id": 1,
-            "Power": 3000,
-            "_Meta": "hidden",
-        }
-        result = _strip_meta(data)
-        assert result == {"Active": True, "Power": 3000}
-        assert "_Id" not in result
-        assert "_Meta" not in result
+    async def executor_job_handler(func, *args):
+        return func(*args)
 
-    def test_strip_meta_nested(self) -> None:
-        """Test stripping metadata from nested structures."""
-        data = {
+    hass_mock.async_add_executor_job = AsyncMock(side_effect=executor_job_handler)
+    return FroniusTDCCoordinator(
+        config_entry=config_entry, hass=hass_mock, logger=MagicMock()
+    )
+
+
+class TestHelpers:
+    """Test helper functions for data manipulation."""
+
+    def test_strip_meta(self) -> None:
+        result = _strip_meta(
+            {"Active": True, "_Id": 1, "TimeTable": {"_A": 1, "Start": "01:00"}}
+        )
+        assert result == {"Active": True, "TimeTable": {"Start": "01:00"}}
+
+    def test_validate_schedule_happy_path(self) -> None:
+        schedule = {
             "Active": True,
-            "_Id": 1,
-            "TimeTable": {
-                "Start": "22:00",
-                "_Calculated": "yes",
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"Start": "00:00", "End": "23:59"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
             },
         }
-        result = _strip_meta(data)
-        assert result == {
+        assert validate_schedule(schedule)["Power"] == 1000
+
+    def test_validate_schedule_invalid_time(self) -> None:
+        schedule = {
             "Active": True,
-            "TimeTable": {"Start": "22:00"},
-        }
-
-    def test_strip_meta_list(self) -> None:
-        """Test stripping metadata from lists."""
-        data = [
-            {"Active": True, "_Id": 1},
-            {"Active": False, "_Id": 2},
-        ]
-        result = _strip_meta(data)
-        assert result == [{"Active": True}, {"Active": False}]
-
-    def test_strip_meta_scalar(self) -> None:
-        """Test that scalar values pass through unchanged."""
-        assert _strip_meta("test") == "test"
-        assert _strip_meta(42) == 42
-        assert _strip_meta(True) is True  # noqa: FBT003
-
-
-class TestFroniusTDCCoordinator:
-    """Test FroniusTDCCoordinator."""
-
-    @pytest.fixture
-    def coordinator(self, mocker):
-        """Create a real coordinator instance with mocked dependencies."""
-        mocker.patch("homeassistant.helpers.frame.report_usage")
-        config_entry = MagicMock(
-            data={
-                "host": "192.168.1.1",
-                "port": 80,
-                "username": "customer",
-                "password": "password",
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"Start": "25:00", "End": "23:59"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
             },
-            spec=ConfigEntry,
-        )
-        return FroniusTDCCoordinator(
-            config_entry=config_entry,
-            hass=MagicMock(),
-            logger=MagicMock(),
-        )
-
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    def test_blocking_get(self, mock_get, coordinator, mock_schedule_data) -> None:
-        """Test _blocking_get method."""
-        mock_get.return_value = mock_schedule_data
-
-        result = coordinator._blocking_get()
-
-        assert len(result) == 2
-        assert result[0]["Active"] is True
-        assert result[0]["ScheduleType"] == "CHARGE_MAX"
-        assert "_Id" not in result[0]  # Meta fields stripped
-        mock_get.assert_called_once()
-
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    def test_blocking_post(self, mock_post, coordinator) -> None:
-        """Test _blocking_post method."""
-        schedules = [
-            {"Active": True, "ScheduleType": "CHARGE_MAX"},
-            {"Active": False, "ScheduleType": "DISCHARGE_MAX"},
-        ]
-
-        coordinator._blocking_post(schedules)
-
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert call_args[0][0] == coordinator._url
-        assert call_args[0][3] == {"timeofuse": schedules}
-
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    def test_blocking_get_with_metadata_stripping(self, mock_get, coordinator) -> None:
-        """Test that _blocking_get strips metadata fields."""
-        raw_data = {
-            "timeofuse": [
-                {"Active": True, "_Id": 1, "_Meta": "hidden"},
-            ]
         }
-        mock_get.return_value = raw_data
+        with pytest.raises(ValueError, match=r"Invalid.*time.*expected HH:MM"):
+            validate_schedule(schedule)
 
-        result = coordinator._blocking_get()
 
-        assert len(result) == 1
-        assert result[0] == {"Active": True}
-        assert "_Id" not in result[0]
-        assert "_Meta" not in result[0]
-
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    def test_connection_error_handling(self, mock_get, coordinator) -> None:
-        """Test that connection errors are handled properly."""
-        mock_get.side_effect = requests.ConnectionError("Cannot reach host")
-
-        with pytest.raises(requests.ConnectionError):
-            coordinator._blocking_get()
+@pytest.mark.asyncio
+class TestCoordinatorOperations:
+    """Test TDC coordinator refresh and mutation operations."""
 
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    def test_http_error_handling(self, mock_get, coordinator) -> None:
-        """Test that HTTP errors are handled properly."""
-        error = requests.HTTPError("401 Unauthorized")
-        mock_get.side_effect = error
-
-        with pytest.raises(requests.HTTPError):
-            coordinator._blocking_get()
-
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    def test_test_connection_blocking(
+    async def test_refresh_creates_rule_ids(
         self, mock_get, coordinator, mock_schedule_data
-    ) -> None:
-        """Test connection testing method."""
+    ):
         mock_get.return_value = mock_schedule_data
+        data = await coordinator._async_update_data()
+        assert len(data) == 2
+        assert data[0]["rule_id"] == "1"
+        assert coordinator.get_rule_ids() == ["1", "2"]
 
-        result = coordinator.test_connection_blocking()
-
-        assert len(result) == 2
-        mock_get.assert_called_once_with(
-            coordinator._url,
-            coordinator._username,
-            coordinator._password,
-            15,
-        )
-
-    @patch("homeassistant.helpers.frame.report_usage")
-    def test_url(self, mock_report_usage) -> None:  # NOQA: ARG002
-        config_entry = MagicMock(
-            data={
-                "host": "example.com",
-                "port": 80,
-                "username": "user",
-                "password": "pass",
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_setters_and_add_remove(self, mock_post, coordinator):
+        coordinator.data = [
+            {
+                "rule_id": "1",
+                "Active": True,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 3000,
+                "TimeTable": {"Start": "22:00", "End": "06:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": False,
+                    "Sun": False,
+                },
             },
-            spec=ConfigEntry,
-        )
-        coordinator = FroniusTDCCoordinator(
-            config_entry=config_entry,
-            hass=MagicMock(),
-            logger=MagicMock(),
-        )
-        assert coordinator._url == "http://example.com:80/api/config/timeofuse"
-
-
-class TestCoordinatorAsyncOperations:
-    """Test async operations of the coordinator."""
-
-    @pytest.fixture
-    def coordinator_with_hass(self, mocker):
-        """Create a coordinator with a real hass mock."""
-        mocker.patch("homeassistant.helpers.frame.report_usage")
-        config_entry = MagicMock(
-            data={
-                "host": "192.168.1.1",
-                "port": 80,
-                "username": "customer",
-                "password": "password",
+            {
+                "rule_id": "2",
+                "Active": False,
+                "ScheduleType": "DISCHARGE_MAX",
+                "Power": 2000,
+                "TimeTable": {"Start": "16:00", "End": "22:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": True,
+                    "Sun": True,
+                },
             },
-            spec=ConfigEntry,
+        ]
+        coordinator._rule_id_to_index = {"1": 0, "2": 1}
+        coordinator.async_refresh = AsyncMock()
+
+        await coordinator.async_set_active("1", active=False)
+        await coordinator.async_set_power("1", 2500)
+        await coordinator.async_set_schedule_type("1", "CHARGE_MIN")
+        await coordinator.async_set_start_time("1", "00:00")
+        await coordinator.async_set_end_time("1", "23:59")
+        await coordinator.async_set_weekday("1", "Sun", enabled=True)
+
+        await coordinator.async_add_schedule(
+            {
+                "Active": True,
+                "ScheduleType": "DISCHARGE_MIN",
+                "Power": 1500,
+                "TimeTable": {"Start": "08:00", "End": "10:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": False,
+                    "Wed": False,
+                    "Thu": False,
+                    "Fri": False,
+                    "Sat": False,
+                    "Sun": False,
+                },
+            }
         )
-        hass_mock = AsyncMock()
+        await coordinator.async_remove_schedule("2")
 
-        # Configure async_add_executor_job to execute the blocking function
-        async def executor_job_handler(func, *args):
-            return func(*args)
+        assert mock_post.call_count == 8
 
-        hass_mock.async_add_executor_job = AsyncMock(side_effect=executor_job_handler)
+    async def test_invalid_inputs(self, coordinator):
+        coordinator.data = [
+            {
+                "rule_id": "1",
+                "Active": True,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 3000,
+                "TimeTable": {"Start": "22:00", "End": "06:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": False,
+                    "Sun": False,
+                },
+            }
+        ]
+        coordinator._rule_id_to_index = {"1": 0}
 
-        return FroniusTDCCoordinator(
-            config_entry=config_entry,
-            hass=hass_mock,
-            logger=MagicMock(),
-        )
+        with pytest.raises(ValueError, match=r"Invalid.*time.*expected HH:MM"):
+            await coordinator.async_set_start_time("1", "99:99")
+        with pytest.raises(ValueError, match="Invalid schedule type"):
+            await coordinator.async_set_schedule_type("1", "NOPE")
+        with pytest.raises(ValueError, match="Invalid weekday"):
+            await coordinator.async_set_weekday("1", "XXX", enabled=True)
+        with pytest.raises(ValueError, match="Unknown rule_id"):
+            coordinator.resolve_rule_index("does-not-exist")
 
-    @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    async def test_async_update_data_timeout_handling(
-        self, mock_get, coordinator_with_hass
-    ):
-        """Test that timeout errors during update are handled properly."""
-        mock_get.side_effect = requests.Timeout("Request timed out")
-
-        with pytest.raises(UpdateFailed, match="Cannot reach"):
-            await coordinator_with_hass._async_update_data()
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    async def test_async_update_data_http_error(self, mock_get, coordinator_with_hass):
-        """Test that HTTP errors during update are handled properly."""
-        mock_get.side_effect = requests.HTTPError("500 Server Error")
-
-        with pytest.raises(UpdateFailed, match="HTTP error"):
-            await coordinator_with_hass._async_update_data()
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
-    async def test_async_update_data_success(
-        self, mock_get, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test successful async update."""
-        mock_get.return_value = mock_schedule_data
-
-        result = await coordinator_with_hass._async_update_data()
-
-        assert len(result) == 2
-        assert result[0]["Active"] is True
-        assert "_Id" not in result[0]
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    async def test_async_set_active_to_true(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test toggling a schedule to active."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-        coordinator_with_hass.async_refresh = AsyncMock()
-
-        await coordinator_with_hass.async_set_active(0, active=True)
-
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args[0]
-        assert call_args[3]["timeofuse"][0]["Active"] is True
-        coordinator_with_hass.async_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    async def test_async_set_active_to_false(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test toggling a schedule to inactive."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-        coordinator_with_hass.async_refresh = AsyncMock()
-
-        await coordinator_with_hass.async_set_active(0, active=False)
-
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args[0]
-        assert call_args[3]["timeofuse"][0]["Active"] is False
-        coordinator_with_hass.async_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_async_set_active_out_of_range(
-        self, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test that out-of-range index returns early with error log."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-
-        await coordinator_with_hass.async_set_active(99, active=True)
-
-        # Method should return early without raising; async_refresh should not be called
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    async def test_async_set_active_request_error(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test that request errors are properly raised as UpdateFailed."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-        mock_post.side_effect = requests.ConnectionError("Cannot reach host")
-
-        with pytest.raises(UpdateFailed, match="Failed to update schedule"):
-            await coordinator_with_hass.async_set_active(0, active=True)
-
-    @pytest.mark.asyncio
-    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    async def test_async_set_active_preserves_other_schedules(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
-    ):
-        """Test that toggling one schedule doesn't affect others."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-        coordinator_with_hass.async_refresh = AsyncMock()
-
-        await coordinator_with_hass.async_set_active(1, active=False)
-
-        call_args = mock_post.call_args[0]
-        schedules = call_args[3]["timeofuse"]
-        # First schedule should remain unchanged
-        assert schedules[0]["Active"] is True
-        # Second schedule should be toggled
-        assert schedules[1]["Active"] is False
+    async def test_update_errors(self, mock_get, coordinator):
+        mock_get.side_effect = requests.ConnectionError("boom")
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()

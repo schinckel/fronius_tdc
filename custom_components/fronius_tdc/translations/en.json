@@ -5,8 +5,8 @@
         "title": "Connect to Fronius Gen24 Inverter",
         "description": "Enter the local IP address and credentials for the inverter web interface. Use the 'customer' or 'technician' account.",
         "data": {
-          "host":     "IP Address / Hostname",
-          "port":     "HTTP Port (default 80)",
+          "host": "IP Address / Hostname",
+          "port": "HTTP Port (default 80)",
           "username": "Username",
           "password": "Password"
         }
@@ -14,10 +14,64 @@
     },
     "error": {
       "cannot_connect": "Cannot reach the inverter. Check the IP address and port.",
-      "invalid_auth":   "Invalid username or password."
+      "invalid_auth": "Invalid username or password."
     },
     "abort": {
       "already_configured": "This inverter is already configured."
+    }
+  },
+  "services": {
+    "add_schedule": {
+      "name": "Add TOU schedule",
+      "description": "Create a new time-of-use rule on the inverter.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config Entry ID",
+          "description": "Optional target integration entry id when multiple inverters are configured."
+        },
+        "active": {
+          "name": "Active",
+          "description": "Whether the new schedule should start enabled."
+        },
+        "schedule_type": {
+          "name": "Schedule Type",
+          "description": "One of CHARGE_MAX, CHARGE_MIN, DISCHARGE_MAX, DISCHARGE_MIN."
+        },
+        "power": {
+          "name": "Power",
+          "description": "Power in watts for this schedule."
+        },
+        "start": {
+          "name": "Start",
+          "description": "Start time in HH:MM."
+        },
+        "end": {
+          "name": "End",
+          "description": "End time in HH:MM."
+        },
+        "weekdays": {
+          "name": "Weekdays",
+          "description": "Weekday map object, e.g. {\"Mon\": true, ...}."
+        }
+      }
+    },
+    "remove_schedule": {
+      "name": "Remove TOU schedule",
+      "description": "Delete an existing time-of-use rule from the inverter.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config Entry ID",
+          "description": "Optional target integration entry id when multiple inverters are configured."
+        },
+        "rule_id": {
+          "name": "Rule ID",
+          "description": "Stable rule id for deleting a schedule."
+        },
+        "index": {
+          "name": "Index",
+          "description": "Optional list index for backward compatibility."
+        }
+      }
     }
   }
 }

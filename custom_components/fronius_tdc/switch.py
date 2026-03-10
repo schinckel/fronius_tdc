@@ -18,7 +18,9 @@ from .const import (
     BATTERY_CONFIG_KEYS,
     BATTERY_CONFIG_LABELS,
     DOMAIN,
+    SCHEDULE_SWITCH_DESCRIPTIONS,
     SCHEDULE_TYPE_LABELS,
+    ScheduleSwitchDescription,
 )
 from .tdc_coordinator import FroniusTDCCoordinator
 
@@ -39,12 +41,18 @@ async def async_setup_entry(
 
     if tdc_coordinator:
         await tdc_coordinator.async_config_entry_first_refresh()
-        entities.extend(
-            [
-                FroniusScheduleSwitch(tdc_coordinator, entry, index)
-                for index in range(len(tdc_coordinator.data or []))
-            ]
-        )
+        for rule_id in tdc_coordinator.get_rule_ids():
+            entities.extend(
+                [
+                    FroniusScheduleSwitch(
+                        tdc_coordinator,
+                        entry,
+                        rule_id,
+                        description,
+                    )
+                    for description in SCHEDULE_SWITCH_DESCRIPTIONS
+                ]
+            )
 
     # Set up Battery configuration switches (booleans only)
     batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(
@@ -82,17 +90,21 @@ async def async_setup_entry(
 class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEntity):
     """Switch that activates/deactivates one Time of Use schedule."""
 
+    entity_description: ScheduleSwitchDescription
+
     def __init__(
         self,
         coordinator: FroniusTDCCoordinator,
         entry: ConfigEntry,
-        index: int,
+        rule_id: str,
+        description: ScheduleSwitchDescription,
     ) -> None:
         """Initialize the switch entity."""
         super().__init__(coordinator)
-        self._index = index
+        self._rule_id = rule_id
+        self.entity_description = description
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_schedule_{index}"
+        self._attr_unique_id = f"{entry.entry_id}_schedule_{rule_id}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": "Fronius Gen24 Time of Use",
@@ -103,8 +115,12 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
     @property
     def _schedule(self) -> dict:
         data = self.coordinator.data or []
-        if self._index < len(data):
-            return data[self._index]
+        try:
+            idx = self.coordinator.resolve_rule_index(self._rule_id)
+        except ValueError:
+            return {}
+        if idx < len(data):
+            return data[idx]
         return {}
 
     @property
@@ -115,6 +131,9 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         Like "Charge Max 3000W 22:00-06:00"
         Based on the schedule parameters.
         """
+        if self.entity_description.weekday:
+            return f"{self.entity_description.name}"
+
         s = self._schedule
         stype = SCHEDULE_TYPE_LABELS.get(
             s.get("ScheduleType", ""),
@@ -135,6 +154,9 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         underlying schedule data so that different modes (charge/discharge,
         max/min) have appropriate battery-style icons.
         """
+        if self.entity_description.weekday:
+            return "mdi:calendar-week"
+
         s = self._schedule
         stype = s.get("ScheduleType", "")
         if stype == "CHARGE_MAX":
@@ -150,6 +172,9 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
     @property
     def is_on(self) -> bool:
         """Return True if the schedule is active, False otherwise."""
+        if self.entity_description.weekday:
+            weekdays = self._schedule.get("Weekdays", {})
+            return bool(weekdays.get(self.entity_description.weekday, False))
         return bool(self._schedule.get("Active", False))
 
     @property
@@ -160,6 +185,7 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         weekdays = s.get("Weekdays", {})
         active_days = [day for day, on in weekdays.items() if on is True]
         return {
+            "rule_id": self._rule_id,
             "schedule_type": s.get("ScheduleType"),
             "power_w": s.get("Power"),
             "start": tt.get("Start"),
@@ -169,12 +195,27 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
         """Turn on the schedule by setting its Active flag to True."""
-        await self.coordinator.async_set_active(self._index, active=True)
+        if self.entity_description.weekday:
+            await self.coordinator.async_set_weekday(
+                self._rule_id,
+                self.entity_description.weekday,
+                enabled=True,
+            )
+            return
+        await self.coordinator.async_set_active(self._rule_id, active=True)
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn off the schedule by setting its Active flag to False."""
-        # pass both parameters as keywords; the boolean must not be positional
-        await self.coordinator.async_set_active(index=self._index, active=False)
+        if self.entity_description.weekday:
+            await self.coordinator.async_set_weekday(
+                self._rule_id,
+                self.entity_description.weekday,
+                enabled=False,
+            )
+            return
+        await self.coordinator.async_set_active(
+            index_or_rule_id=self._rule_id, active=False
+        )
 
 
 class FroniusBatterySwitch(
