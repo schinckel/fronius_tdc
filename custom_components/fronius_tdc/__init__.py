@@ -7,7 +7,7 @@ https://github.com/schinckel/fronius_tdc
 
 from __future__ import annotations
 
-from datetime import time
+import datetime
 from typing import TYPE_CHECKING, Any
 
 import homeassistant.helpers.config_validation as cv
@@ -68,9 +68,9 @@ def _resolve_coordinator(
     return next(iter(coordinators.values()))
 
 
-def _parse_hhmm(value: str | time) -> str:
+def _parse_hhmm(value: str | datetime.time) -> str:
     """Normalize service time input to HH:MM."""
-    if isinstance(value, time):
+    if isinstance(value, datetime.time):
         return f"{value.hour:02d}:{value.minute:02d}"
     if isinstance(value, str):
         return value
@@ -156,7 +156,8 @@ def _register_services(hass: HomeAssistant) -> None:
             msg = "Either rule_id or index is required"
             raise vol.Invalid(msg)
 
-        target: int | str = rule_id if rule_id is not None else int(index)
+        # At this point, at least one is not None due to the check above
+        target: int | str = rule_id if rule_id is not None else int(index)  # type: ignore[arg-type]
         await coordinator.async_remove_schedule(target)
 
     hass.services.async_register(
