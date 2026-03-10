@@ -60,3 +60,20 @@ async def test_async_setup_entry_creates_time_entities() -> None:
 
     entities = add_entities.call_args[0][0]
     assert len(entities) == 2
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_without_coordinator() -> None:
+    """Test setup when coordinator is missing."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
+
+    # No coordinator
+    hass.data = {DOMAIN: {}}
+    add_entities = MagicMock()
+
+    await async_setup_entry(hass, entry, add_entities)
+
+    # Should call add_entities with empty list
+    entities = add_entities.call_args[0][0]
+    assert len(entities) == 0

@@ -11,6 +11,8 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.fronius_tdc.tdc_coordinator import (
     FroniusTDCCoordinator,
+    _ensure_power,
+    _ensure_weekdays,
     _strip_meta,
     validate_schedule,
 )
@@ -48,6 +50,19 @@ class TestHelpers:
             {"Active": True, "_Id": 1, "TimeTable": {"_A": 1, "Start": "01:00"}}
         )
         assert result == {"Active": True, "TimeTable": {"Start": "01:00"}}
+
+    def test_strip_meta_list(self) -> None:
+        """It should recurse through list items as well as dicts."""
+        result = _strip_meta(
+            [
+                {"_Id": 1, "Active": True},
+                {"TimeTable": {"_Tmp": 1, "Start": "00:00", "End": "01:00"}},
+            ]
+        )
+        assert result == [
+            {"Active": True},
+            {"TimeTable": {"Start": "00:00", "End": "01:00"}},
+        ]
 
     def test_validate_schedule_happy_path(self) -> None:
         schedule = {
@@ -203,3 +218,272 @@ class TestCoordinatorOperations:
         mock_get.side_effect = requests.ConnectionError("boom")
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
+
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_update_http_error(self, mock_get, coordinator):
+        """HTTPError should be wrapped with HTTP-specific UpdateFailed message."""
+        mock_get.side_effect = requests.HTTPError("bad status")
+        with pytest.raises(UpdateFailed, match="HTTP error from inverter"):
+            await coordinator._async_update_data()
+
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_blocking_get_rejects_non_list_payload(self, mock_get, coordinator):
+        """Inverter payload must provide a list for timeofuse."""
+        mock_get.return_value = {"timeofuse": {"not": "a list"}}
+        with pytest.raises(TypeError, match="timeofuse must be a list"):
+            coordinator._blocking_get()
+
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_rule_set_changed_flag(self, mock_get, coordinator):
+        """Changing the ordered rule IDs should set and then clear the marker."""
+        first = {
+            "timeofuse": [
+                {
+                    "_Id": "1",
+                    "Active": True,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "00:00", "End": "01:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": True,
+                        "Wed": True,
+                        "Thu": True,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            ]
+        }
+        second = {
+            "timeofuse": [
+                {
+                    "_Id": "2",
+                    "Active": True,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "00:00", "End": "01:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": True,
+                        "Wed": True,
+                        "Thu": True,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            ]
+        }
+
+        mock_get.return_value = first
+        coordinator._blocking_get()
+        assert coordinator.consume_rule_set_changed() is False
+
+        mock_get.return_value = second
+        coordinator._blocking_get()
+        assert coordinator.consume_rule_set_changed() is True
+        assert coordinator.consume_rule_set_changed() is False
+
+    async def test_derive_rule_id_hash_and_collision(self, coordinator):
+        """Fallback IDs should be deterministic and collision-safe."""
+        raw_schedule = {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"Start": "00:00", "End": "01:00"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+        normalized = validate_schedule(raw_schedule)
+
+        collisions: dict[str, int] = {}
+        first = coordinator._derive_rule_id({}, normalized, collisions)
+        second = coordinator._derive_rule_id({}, normalized, collisions)
+
+        assert first.startswith("hash_")
+        assert second == f"{first}_2"
+
+        # With a fresh collision map, previous generated ID should be reused.
+        third = coordinator._derive_rule_id({}, normalized, {})
+        assert third == second
+
+    async def test_resolve_rule_index_int_and_out_of_range(self, coordinator):
+        """Integer index resolution should support valid and invalid indices."""
+        coordinator.data = [
+            {
+                "rule_id": "1",
+                "Active": True,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 1000,
+                "TimeTable": {"Start": "00:00", "End": "01:00"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": False,
+                    "Sun": False,
+                },
+            }
+        ]
+
+        assert coordinator.resolve_rule_index(0) == 0
+        with pytest.raises(ValueError, match="Schedule index out of range"):
+            coordinator.resolve_rule_index(2)
+
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_write_schedules_wraps_post_errors(
+        self, mock_post, coordinator
+    ):
+        """Request exceptions from POST should become UpdateFailed."""
+        schedule = {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"Start": "00:00", "End": "01:00"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+        mock_post.side_effect = requests.Timeout("slow")
+        coordinator.async_refresh = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="Failed to update schedules"):
+            await coordinator._async_write_schedules([schedule])
+
+        coordinator.async_refresh.assert_not_called()
+
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_test_connection_blocking(
+        self, mock_get, coordinator, mock_schedule_data
+    ):
+        """test_connection_blocking should delegate to _blocking_get."""
+        mock_get.return_value = mock_schedule_data
+        data = coordinator.test_connection_blocking()
+        assert len(data) == 2
+
+
+class TestValidationFunctions:
+    """Test validation helper functions."""
+
+    def test_ensure_power_out_of_range_low(self) -> None:
+        """Test _ensure_power with value below minimum."""
+        with pytest.raises(ValueError, match=r"Power.*out of range"):
+            _ensure_power(-100)
+
+    def test_ensure_power_out_of_range_high(self) -> None:
+        """Test _ensure_power with value above maximum."""
+        with pytest.raises(ValueError, match=r"Power.*out of range"):
+            _ensure_power(25000)
+
+    def test_ensure_weekdays_missing_day(self) -> None:
+        """Test _ensure_weekdays with missing weekday."""
+        # Missing "Sun"
+        weekdays = {
+            "Mon": True,
+            "Tue": True,
+            "Wed": True,
+            "Thu": True,
+            "Fri": True,
+            "Sat": False,
+        }
+
+        with pytest.raises(ValueError, match="Missing weekday"):
+            _ensure_weekdays(weekdays)
+
+    def test_ensure_weekdays_non_boolean(self) -> None:
+        """Test _ensure_weekdays with non-boolean value."""
+        weekdays = {
+            "Mon": True,
+            "Tue": True,
+            "Wed": True,
+            "Thu": True,
+            "Fri": True,
+            "Sat": False,
+            "Sun": "yes",  # Should be boolean
+        }
+
+        with pytest.raises(TypeError, match="must be boolean"):
+            _ensure_weekdays(weekdays)
+
+    def test_validate_schedule_missing_keys(self) -> None:
+        """Test validate_schedule with missing required keys."""
+        schedule = {
+            "Active": True,
+            "Power": 1000,
+            # Missing ScheduleType, TimeTable, Weekdays
+        }
+
+        with pytest.raises(ValueError, match="Missing schedule keys"):
+            validate_schedule(schedule)
+
+    def test_validate_schedule_timetable_not_dict(self) -> None:
+        """Test validate_schedule with TimeTable not being a dict."""
+        schedule = {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": "not_a_dict",  # Should be dict
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+
+        with pytest.raises(TypeError, match="TimeTable must be an object"):
+            validate_schedule(schedule)
+
+    def test_validate_schedule_timetable_missing_start(self) -> None:
+        """Test validate_schedule with TimeTable missing Start."""
+        schedule = {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"End": "23:59"},  # Missing Start
+            "Weekdays": {
+                "Mon": True,
+                "Tue": True,
+                "Wed": True,
+                "Thu": True,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+
+        with pytest.raises(ValueError, match="TimeTable requires Start and End"):
+            validate_schedule(schedule)
+
+    def test_validate_schedule_weekdays_not_dict(self) -> None:
+        """Test validate_schedule with Weekdays not being a dict."""
+        schedule = {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1000,
+            "TimeTable": {"Start": "00:00", "End": "23:59"},
+            "Weekdays": "not_a_dict",  # Should be dict
+        }
+
+        with pytest.raises(TypeError, match="Weekdays must be an object"):
+            validate_schedule(schedule)
