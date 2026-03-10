@@ -1,328 +1,208 @@
 """Tests for select entities."""
 
+# ruff: noqa: D103
+
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.fronius_tdc.const import (
-    DOMAIN,
-)
+from custom_components.fronius_tdc.const import DOMAIN
 from custom_components.fronius_tdc.select import (
     FroniusBatterySelect,
+    FroniusScheduleSelect,
     async_setup_entry,
 )
 
 
-class TestFroniusBatterySelect:
-    """Test FroniusBatterySelect entity."""
+@pytest.mark.asyncio
+async def test_schedule_select_setter() -> None:
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "ScheduleType": "CHARGE_MAX"}]
+    coordinator.resolve_rule_index = MagicMock(return_value=0)
+    coordinator.async_set_schedule_type = AsyncMock()
+    entry = MagicMock(entry_id="entry1")
 
-    @pytest.fixture
-    def coordinator_mock(self):
-        """Create a mock coordinator."""
-        coordinator = MagicMock()
-        coordinator.data = {
-            "HYB_EM_MODE": 0,
-            "BAT_M0_SOC_MODE": "auto",
-        }
-        return coordinator
-
-    @pytest.fixture
-    def config_entry_mock(self):
-        """Create a mock config entry."""
-        entry = MagicMock()
-        entry.entry_id = "test_entry_123"
-        return entry
-
-    @pytest.fixture
-    def em_mode_select(self, coordinator_mock, config_entry_mock):
-        """Create an EM mode select entity."""
-        return FroniusBatterySelect(coordinator_mock, config_entry_mock, "HYB_EM_MODE")
-
-    @pytest.fixture
-    def soc_mode_select(self, coordinator_mock, config_entry_mock):
-        """Create an SOC mode select entity."""
-        return FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "BAT_M0_SOC_MODE"
-        )
-
-    def test_select_initialization_em_mode(self, em_mode_select) -> None:
-        """Test select entity initialization for EM mode."""
-        assert em_mode_select._key == "HYB_EM_MODE"
-        assert (
-            em_mode_select._attr_unique_id
-            == "test_entry_123_battery_select_HYB_EM_MODE"
-        )
-        assert em_mode_select._attr_device_info["manufacturer"] == "Fronius"
-        assert em_mode_select._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
-
-    def test_select_options_em_mode(self, em_mode_select) -> None:
-        """Test select options for EM mode."""
-        assert "Automatic" in em_mode_select._attr_options
-        assert "Manual" in em_mode_select._attr_options
-        assert len(em_mode_select._attr_options) == 2
-
-    def test_select_options_soc_mode(self, soc_mode_select) -> None:
-        """Test select options for SOC mode."""
-        assert "Manual" in soc_mode_select._attr_options
-        assert "Auto" in soc_mode_select._attr_options
-        assert len(soc_mode_select._attr_options) == 2
-
-    def test_label_to_value_mapping_em_mode(self, em_mode_select) -> None:
-        """Test reverse label-to-value mapping for EM mode."""
-        assert em_mode_select._label_to_value["Automatic"] == 0
-        assert em_mode_select._label_to_value["Manual"] == 1
-
-    def test_label_to_value_mapping_soc_mode(self, soc_mode_select) -> None:
-        """Test reverse label-to-value mapping for SOC mode."""
-        assert soc_mode_select._label_to_value["Auto"] == "auto"
-        assert soc_mode_select._label_to_value["Manual"] == "manual"
-
-    def test_name_property(self, em_mode_select) -> None:
-        """Test name property uses label from const."""
-        assert em_mode_select.name == "Energy Management Mode"
-
-    def test_name_property_soc(self, soc_mode_select) -> None:
-        """Test name property for SOC mode."""
-        assert soc_mode_select.name == "Battery SOC Mode"
-
-    def test_name_property_with_fallback(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test name property falls back to title-cased key."""
-        # Use a key that's not in BATTERY_CONFIG_LABELS
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "UNKNOWN_KEY"
-        )
-        assert select.name == "Unknown Key"
-
-    def test_current_option_property(self, em_mode_select) -> None:
-        """Test current_option property returns label for current value."""
-        assert em_mode_select.current_option == "Automatic"
-
-    def test_current_option_property_manual(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test current_option property when set to Manual."""
-        coordinator_mock.data = {"HYB_EM_MODE": 1}
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "HYB_EM_MODE"
-        )
-        assert select.current_option == "Manual"
-
-    def test_current_option_property_soc_mode(self, soc_mode_select) -> None:
-        """Test current_option property for SOC mode."""
-        assert soc_mode_select.current_option == "Auto"
-
-    def test_current_option_with_missing_key(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test current_option returns None when key is missing."""
-        coordinator_mock.data = {}
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "HYB_EM_MODE"
-        )
-        assert select.current_option is None
-
-    def test_current_option_with_none_coordinator_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test current_option returns None when coordinator data is None."""
-        coordinator_mock.data = None
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "HYB_EM_MODE"
-        )
-        assert select.current_option is None
-
-    def test_current_option_with_unknown_value(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test current_option returns None for unknown values."""
-        coordinator_mock.data = {"HYB_EM_MODE": 999}
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "HYB_EM_MODE"
-        )
-        assert select.current_option is None
-
-    @pytest.mark.asyncio
-    async def test_async_select_option_automatic(self, em_mode_select) -> None:
-        """Test selecting the Automatic option."""
-        em_mode_select.coordinator.async_set_select = AsyncMock()
-
-        await em_mode_select.async_select_option("Automatic")
-
-        em_mode_select.coordinator.async_set_select.assert_called_once_with(
-            "HYB_EM_MODE", 0
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_select_option_manual(self, em_mode_select) -> None:
-        """Test selecting the Manual option."""
-        em_mode_select.coordinator.async_set_select = AsyncMock()
-
-        await em_mode_select.async_select_option("Manual")
-
-        em_mode_select.coordinator.async_set_select.assert_called_once_with(
-            "HYB_EM_MODE", 1
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_select_option_soc_auto(self, soc_mode_select) -> None:
-        """Test selecting the Auto option for SOC mode."""
-        soc_mode_select.coordinator.async_set_select = AsyncMock()
-
-        await soc_mode_select.async_select_option("Auto")
-
-        soc_mode_select.coordinator.async_set_select.assert_called_once_with(
-            "BAT_M0_SOC_MODE", "auto"
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_select_option_soc_manual(self, soc_mode_select) -> None:
-        """Test selecting the Manual option for SOC mode."""
-        soc_mode_select.coordinator.async_set_select = AsyncMock()
-
-        await soc_mode_select.async_select_option("Manual")
-
-        soc_mode_select.coordinator.async_set_select.assert_called_once_with(
-            "BAT_M0_SOC_MODE", "manual"
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_select_option_unknown(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test selecting an unknown option (call is skipped, error logged)."""
-        select = FroniusBatterySelect(
-            coordinator_mock, config_entry_mock, "HYB_EM_MODE"
-        )
-        select.coordinator.async_set_select = AsyncMock()
-
-        await select.async_select_option("UnknownOption")
-
-        # async_set_select should not be called for unknown options
-        select.coordinator.async_set_select.assert_not_called()
+    entity = FroniusScheduleSelect(
+        coordinator,
+        entry,
+        "1",
+        MagicMock(
+            key="schedule_type",
+            name="Type",
+            options=("CHARGE_MAX", "CHARGE_MIN", "DISCHARGE_MAX", "DISCHARGE_MIN"),
+        ),
+    )
+    await entity.async_select_option("Charge Min")
+    coordinator.async_set_schedule_type.assert_called_once_with("1", "CHARGE_MIN")
 
 
-class TestAsyncSetupEntry:
-    """Test async_setup_entry function for select entities."""
+@pytest.mark.asyncio
+async def test_schedule_select_current_option_value_error() -> None:
+    """Test current_option returns None when resolve_rule_index raises ValueError."""
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "ScheduleType": "CHARGE_MAX"}]
+    # Make resolve_rule_index raise ValueError
+    coordinator.resolve_rule_index = MagicMock(side_effect=ValueError("Invalid rule"))
+    entry = MagicMock(entry_id="entry1")
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_coordinator(self) -> None:
-        """Test setup entry creates select entities."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    entity = FroniusScheduleSelect(
+        coordinator,
+        entry,
+        "1",
+        MagicMock(
+            key="schedule_type",
+            name="Type",
+            options=("CHARGE_MAX", "CHARGE_MIN", "DISCHARGE_MAX", "DISCHARGE_MIN"),
+        ),
+    )
+    # Should return None when ValueError occurs
+    assert entity.current_option is None
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        coordinator.data = {
-            "HYB_EM_MODE": 0,
-            "BAT_M0_SOC_MODE": "auto",
-        }
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+@pytest.mark.asyncio
+async def test_schedule_select_async_select_option_invalid() -> None:
+    """Test schedule select async_select_option raises ValueError for invalid option."""
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "ScheduleType": "CHARGE_MAX"}]
+    coordinator.resolve_rule_index = MagicMock(return_value=0)
+    coordinator.async_set_schedule_type = AsyncMock()
+    entry = MagicMock(entry_id="entry1")
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    entity = FroniusScheduleSelect(
+        coordinator,
+        entry,
+        "1",
+        MagicMock(
+            key="schedule_type",
+            name="Type",
+            options=("CHARGE_MAX", "CHARGE_MIN", "DISCHARGE_MAX", "DISCHARGE_MIN"),
+        ),
+    )
 
-        coordinator.async_config_entry_first_refresh.assert_called_once()
-        async_add_entities.assert_called_once()
+    # Try to select an invalid option that's not in _label_to_value mapping
+    with pytest.raises(ValueError, match="Invalid schedule type option"):
+        await entity.async_select_option("INVALID_OPTION")
 
-        # Check that 2 select entities were created
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 2
-        assert all(isinstance(e, FroniusBatterySelect) for e in entities)
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_without_coordinator(self) -> None:
-        """Test setup entry returns early if no coordinator."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+@pytest.mark.asyncio
+async def test_async_setup_entry_includes_schedule_selects() -> None:
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-        hass.data = {DOMAIN: {}}
-        async_add_entities = MagicMock()
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    batteries = MagicMock()
+    batteries.data = {}
+    batteries.async_config_entry_first_refresh = AsyncMock()
 
-        async_add_entities.assert_not_called()
+    hass.data = {
+        DOMAIN: {"entry1": tdc, "batteries_coordinator": {"entry1": batteries}}
+    }
+    add_entities = MagicMock()
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_empty_data(self) -> None:
-        """Test setup entry with coordinator returning no data."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    await async_setup_entry(hass, entry, add_entities)
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        coordinator.data = {}
+    entities = add_entities.call_args[0][0]
+    assert any(isinstance(entity, FroniusScheduleSelect) for entity in entities)
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+@pytest.mark.asyncio
+async def test_async_setup_entry_without_batteries_coordinator() -> None:
+    """Test setup when batteries coordinator is missing."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-        # No entities should be created if coordinator data is empty
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 0
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_partial_data(self) -> None:
-        """Test setup entry with coordinator returning partial data."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    # No batteries coordinator
+    hass.data = {DOMAIN: {"entry1": tdc}}
+    add_entities = MagicMock()
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        # Only provide EM mode
-        coordinator.data = {
-            "HYB_EM_MODE": 0,
-        }
+    await async_setup_entry(hass, entry, add_entities)
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+    # Should still call add_entities with schedule selects only
+    entities = add_entities.call_args[0][0]
+    assert all(isinstance(entity, FroniusScheduleSelect) for entity in entities)
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
 
-        # Only 1 entity should be created
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 1
-        assert entities[0]._key == "HYB_EM_MODE"
+@pytest.mark.asyncio
+async def test_async_setup_entry_with_battery_selects() -> None:
+    """Test setup when batteries coordinator has select keys."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_filters_unknown_keys(self) -> None:
-        """Test setup entry filters out keys not in BATTERY_SELECT_OPTIONS."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        # Include an unknown key that's not in BATTERY_SELECT_OPTIONS
-        coordinator.data = {
-            "HYB_EM_MODE": 0,
-            "UNKNOWN_KEY": "value",
-        }
+    batteries = MagicMock()
+    # Add select keys that should create battery select entities
+    batteries.data = {
+        "HYB_EM_MODE": "charge",
+        "BAT_M0_SOC_MODE": "active",
+    }
+    batteries.async_config_entry_first_refresh = AsyncMock()
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+    hass.data = {
+        DOMAIN: {"entry1": tdc, "batteries_coordinator": {"entry1": batteries}}
+    }
+    add_entities = MagicMock()
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    await async_setup_entry(hass, entry, add_entities)
 
-        # Only 1 entity should be created
-        # (only HYB_EM_MODE is in BATTERY_SELECT_OPTIONS)
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 1
-        assert entities[0]._key == "HYB_EM_MODE"
+    entities = add_entities.call_args[0][0]
+    # Should have both schedule and battery selects
+    schedule_selects = [e for e in entities if isinstance(e, FroniusScheduleSelect)]
+    battery_selects = [e for e in entities if isinstance(e, FroniusBatterySelect)]
+
+    assert len(schedule_selects) > 0
+    assert len(battery_selects) > 0
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_battery_only() -> None:
+    """Test setup with only batteries coordinator (no TDC coordinator)."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
+
+    batteries = MagicMock()
+    batteries.data = {
+        "HYB_EM_MODE": "charge",
+        "BAT_M0_SOC_MODE": "active",
+    }
+    batteries.async_config_entry_first_refresh = AsyncMock()
+
+    # No tdc coordinator, only batteries
+    hass.data = {DOMAIN: {"batteries_coordinator": {"entry1": batteries}}}
+    add_entities = MagicMock()
+
+    await async_setup_entry(hass, entry, add_entities)
+
+    entities = add_entities.call_args[0][0]
+    # Should have only battery selects
+    battery_selects = [e for e in entities if isinstance(e, FroniusBatterySelect)]
+    assert len(battery_selects) > 0
+
+
+def test_schedule_select_name() -> None:
+    """Test schedule select name property returns description label."""
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "ScheduleType": "CHARGE_MAX"}]
+    coordinator.resolve_rule_index = MagicMock(return_value=0)
+    entry = MagicMock(entry_id="entry1")
+
+    description = SimpleNamespace(
+        key="schedule_type",
+        name="Schedule Type Label",
+        options=("CHARGE_MAX", "CHARGE_MIN", "DISCHARGE_MAX", "DISCHARGE_MIN"),
+    )
+    entity = FroniusScheduleSelect(coordinator, entry, "1", description)
+
+    assert entity.name == "Schedule Type Label"

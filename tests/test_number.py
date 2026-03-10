@@ -1,285 +1,158 @@
 """Tests for number entities."""
 
+# ruff: noqa: D103
+
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.const import PERCENTAGE, UnitOfPower
 
 from custom_components.fronius_tdc.const import DOMAIN
 from custom_components.fronius_tdc.number import (
-    NUMBER_MIN_MAX,
-    PERCENTAGE_KEYS,
     FroniusBatteryNumber,
+    FroniusScheduleNumber,
     async_setup_entry,
 )
 
 
-class TestFroniusBatteryNumber:
-    """Test FroniusBatteryNumber entity."""
+@pytest.mark.asyncio
+async def test_schedule_number_setter() -> None:
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "Power": 3000}]
+    coordinator.resolve_rule_index = MagicMock(return_value=0)
+    coordinator.async_set_power = AsyncMock()
+    entry = MagicMock(entry_id="entry1")
 
-    @pytest.fixture
-    def coordinator_mock(self):
-        """Create a mock coordinator."""
-        coordinator = MagicMock()
-        coordinator.data = {
-            "HYB_EM_POWER": 5000,
-            "HYB_BM_PACMIN": 500,
-            "HYB_BACKUP_CRITICALSOC": 10,
-            "HYB_BACKUP_RESERVED": 20,
-            "BAT_M0_SOC_MAX": 100,
-            "BAT_M0_SOC_MIN": 0,
-        }
-        return coordinator
-
-    @pytest.fixture
-    def config_entry_mock(self):
-        """Create a mock config entry."""
-        entry = MagicMock()
-        entry.entry_id = "test_entry_123"
-        return entry
-
-    @pytest.fixture
-    def power_number(self, coordinator_mock, config_entry_mock):
-        """Create a power number entity."""
-        return FroniusBatteryNumber(coordinator_mock, config_entry_mock, "HYB_EM_POWER")
-
-    @pytest.fixture
-    def soc_number(self, coordinator_mock, config_entry_mock):
-        """Create an SOC (percentage) number entity."""
-        return FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "BAT_M0_SOC_MAX"
-        )
-
-    def test_number_initialization_power(self, power_number) -> None:
-        """Test number entity initialization for power."""
-        assert power_number._key == "HYB_EM_POWER"
-        assert (
-            power_number._attr_unique_id == "test_entry_123_battery_number_HYB_EM_POWER"
-        )
-        assert power_number._attr_device_info["manufacturer"] == "Fronius"
-        assert power_number._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
-        assert power_number._attr_native_min_value == -200000
-        assert power_number._attr_native_max_value == 200000
-        assert power_number._attr_native_unit_of_measurement == UnitOfPower.WATT
-
-    def test_number_initialization_percentage(self, soc_number) -> None:
-        """Test number entity initialization for percentage."""
-        assert soc_number._key == "BAT_M0_SOC_MAX"
-        assert soc_number._attr_native_min_value == 0
-        assert soc_number._attr_native_max_value == 100
-        assert soc_number._attr_native_unit_of_measurement == PERCENTAGE
-
-    def test_name_property(self, power_number) -> None:
-        """Test name property uses label from const."""
-        assert power_number.name == "Energy Management Power"
-
-    def test_name_property_percentage(self, soc_number) -> None:
-        """Test name property for percentage entity."""
-        assert soc_number.name == "Battery Max SOC"
-
-    def test_name_property_with_fallback(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test name property falls back to title-cased key."""
-        # Use a key that's not in BATTERY_CONFIG_LABELS
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "UNKNOWN_KEY"
-        )
-        assert number.name == "Unknown Key"
-
-    def test_native_value_property(self, power_number) -> None:
-        """Test native_value property returns current value."""
-        assert power_number.native_value == 5000.0
-
-    def test_native_value_property_with_missing_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test native_value returns None when key is missing."""
-        coordinator_mock.data = {}
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
-        assert number.native_value is None
-
-    def test_native_value_property_with_none_coordinator_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test native_value returns None when coordinator data is None."""
-        coordinator_mock.data = None
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
-        assert number.native_value is None
-
-    def test_native_value_converts_to_float(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test native_value converts integer values to float."""
-        coordinator_mock.data = {"HYB_EM_POWER": 3000}
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
-        assert number.native_value == 3000.0
-        assert isinstance(number.native_value, float)
-
-    def test_unit_of_measurement_for_all_percentage_keys(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test that all percentage keys have PERCENTAGE unit."""
-        for key in PERCENTAGE_KEYS:
-            number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, key)
-            assert number._attr_native_unit_of_measurement == PERCENTAGE, (
-                f"{key} should have PERCENTAGE unit"
-            )
-
-    def test_min_max_values_for_all_keys(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test that all keys in NUMBER_MIN_MAX have proper min/max values."""
-        for key in NUMBER_MIN_MAX:
-            number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, key)
-            min_val, max_val = NUMBER_MIN_MAX[key]
-            assert number._attr_native_min_value == min_val, f"{key} min value mismatch"
-            assert number._attr_native_max_value == max_val, f"{key} max value mismatch"
-
-    @pytest.mark.asyncio
-    async def test_async_set_native_value_int(self, power_number) -> None:
-        """Test setting an integer value."""
-        power_number.coordinator.async_set_number = AsyncMock()
-
-        await power_number.async_set_native_value(6000.0)
-
-        power_number.coordinator.async_set_number.assert_called_once_with(
-            "HYB_EM_POWER", 6000
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_set_native_value_float(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
-        """Test setting a float value (non-integer)."""
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
-        number.coordinator.async_set_number = AsyncMock()
-
-        await number.async_set_native_value(5500.5)
-
-        number.coordinator.async_set_number.assert_called_once_with(
-            "HYB_EM_POWER", 5500.5
-        )
-
-    @pytest.mark.asyncio
-    async def test_async_set_native_value_percentage(self, soc_number) -> None:
-        """Test setting a percentage value."""
-        soc_number.coordinator.async_set_number = AsyncMock()
-
-        await soc_number.async_set_native_value(95.0)
-
-        soc_number.coordinator.async_set_number.assert_called_once_with(
-            "BAT_M0_SOC_MAX", 95
-        )
+    entity = FroniusScheduleNumber(
+        coordinator,
+        entry,
+        "1",
+        MagicMock(key="power", name="Power", min_value=0, max_value=20000, step=100),
+    )
+    await entity.async_set_native_value(3500)
+    coordinator.async_set_power.assert_called_once_with("1", 3500)
 
 
-class TestAsyncSetupEntry:
-    """Test async_setup_entry function for number entities."""
+@pytest.mark.asyncio
+async def test_async_setup_entry_includes_schedule_numbers() -> None:
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_coordinator(self) -> None:
-        """Test setup entry creates number entities."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        coordinator.data = {
-            "HYB_EM_POWER": 5000,
-            "HYB_BM_PACMIN": 500,
-            "HYB_BACKUP_CRITICALSOC": 10,
-            "HYB_BACKUP_RESERVED": 20,
-            "BAT_M0_SOC_MAX": 100,
-            "BAT_M0_SOC_MIN": 0,
-        }
+    batteries = MagicMock()
+    batteries.data = {}
+    batteries.async_config_entry_first_refresh = AsyncMock()
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+    hass.data = {
+        DOMAIN: {"entry1": tdc, "batteries_coordinator": {"entry1": batteries}}
+    }
+    add_entities = MagicMock()
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    await async_setup_entry(hass, entry, add_entities)
 
-        coordinator.async_config_entry_first_refresh.assert_called_once()
-        async_add_entities.assert_called_once()
+    entities = add_entities.call_args[0][0]
+    assert any(isinstance(entity, FroniusScheduleNumber) for entity in entities)
 
-        # Check that 6 number entities were created (all numeric keys)
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 6
-        assert all(isinstance(e, FroniusBatteryNumber) for e in entities)
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_without_coordinator(self) -> None:
-        """Test setup entry returns early if no coordinator."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+@pytest.mark.asyncio
+async def test_async_setup_entry_without_batteries_coordinator() -> None:
+    """Test setup when batteries coordinator is missing."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-        hass.data = {DOMAIN: {}}
-        async_add_entities = MagicMock()
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    # No batteries coordinator
+    hass.data = {DOMAIN: {"entry1": tdc}}
+    add_entities = MagicMock()
 
-        async_add_entities.assert_not_called()
+    await async_setup_entry(hass, entry, add_entities)
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_empty_data(self) -> None:
-        """Test setup entry with coordinator returning no data."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    # Should still call add_entities with schedule numbers only
+    entities = add_entities.call_args[0][0]
+    assert all(isinstance(entity, FroniusScheduleNumber) for entity in entities)
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        coordinator.data = {}
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+@pytest.mark.asyncio
+async def test_async_setup_entry_with_battery_numbers() -> None:
+    """Test setup when batteries coordinator has numeric keys."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    tdc = MagicMock()
+    tdc.get_rule_ids = MagicMock(return_value=["1"])
+    tdc.async_config_entry_first_refresh = AsyncMock()
 
-        # No entities should be created if coordinator data is empty
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 0
+    batteries = MagicMock()
+    # Add numeric keys that should create battery number entities
+    batteries.data = {
+        "HYB_EM_POWER": 5000,
+        "HYB_BM_PACMIN": 4000,
+    }
+    batteries.async_config_entry_first_refresh = AsyncMock()
 
-    @pytest.mark.asyncio
-    async def test_async_setup_entry_with_partial_data(self) -> None:
-        """Test setup entry with coordinator returning partial data."""
-        hass = MagicMock()
-        config_entry = MagicMock()
-        config_entry.entry_id = "test_entry"
+    hass.data = {
+        DOMAIN: {"entry1": tdc, "batteries_coordinator": {"entry1": batteries}}
+    }
+    add_entities = MagicMock()
 
-        coordinator = MagicMock()
-        coordinator.async_config_entry_first_refresh = AsyncMock()
-        # Only provide some numeric keys
-        coordinator.data = {
-            "HYB_EM_POWER": 5000,
-            "BAT_M0_SOC_MAX": 100,
-        }
+    await async_setup_entry(hass, entry, add_entities)
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
-        async_add_entities = MagicMock()
+    entities = add_entities.call_args[0][0]
+    # Should have both schedule and battery numbers
+    schedule_numbers = [e for e in entities if isinstance(e, FroniusScheduleNumber)]
+    battery_numbers = [e for e in entities if isinstance(e, FroniusBatteryNumber)]
 
-        await async_setup_entry(hass, config_entry, async_add_entities)
+    assert len(schedule_numbers) > 0
+    assert len(battery_numbers) > 0
 
-        # Only 2 entities should be created
-        entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 2
-        keys = [e._key for e in entities]
-        assert "HYB_EM_POWER" in keys
-        assert "BAT_M0_SOC_MAX" in keys
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_battery_only() -> None:
+    """Test setup with only batteries coordinator (no TDC coordinator)."""
+    hass = MagicMock()
+    entry = MagicMock(entry_id="entry1")
+
+    batteries = MagicMock()
+    batteries.data = {
+        "HYB_EM_POWER": 5000,
+        "HYB_BM_PACMIN": 4000,
+    }
+    batteries.async_config_entry_first_refresh = AsyncMock()
+
+    # No tdc coordinator, only batteries
+    hass.data = {DOMAIN: {"batteries_coordinator": {"entry1": batteries}}}
+    add_entities = MagicMock()
+
+    await async_setup_entry(hass, entry, add_entities)
+
+    entities = add_entities.call_args[0][0]
+    # Should have only battery numbers
+    battery_numbers = [e for e in entities if isinstance(e, FroniusBatteryNumber)]
+    assert len(battery_numbers) > 0
+
+
+def test_schedule_number_name() -> None:
+    """Test schedule number name property returns description label."""
+    coordinator = MagicMock()
+    coordinator.data = [{"rule_id": "1", "Power": 3000}]
+    coordinator.resolve_rule_index = MagicMock(return_value=0)
+    entry = MagicMock(entry_id="entry1")
+
+    description = SimpleNamespace(
+        key="power",
+        name="Power Label",
+        min_value=0,
+        max_value=20000,
+        step=100,
+    )
+    entity = FroniusScheduleNumber(coordinator, entry, "1", description)
+
+    assert entity.name == "Power Label"

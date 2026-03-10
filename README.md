@@ -5,8 +5,30 @@ Home Assistant integration for controlling Fronius Gen24 inverters with Time of 
 ## Features
 
 - Read and control Time of Use (TOU) schedules
+- Edit TOU fields per rule directly in Home Assistant:
+  - Active state
+  - Weekday enable flags (Mon-Sun)
+  - Power setpoint
+  - Schedule type
+  - Start and end times
+- Add and remove TOU rules via integration services
 - Change SoC settings (Battery Reserve, Max Charge, etc)
 - Set self-consumption optimisation target
+
+## TOU Editing Model
+
+- The inverter is the source of truth for schedules.
+- This integration does not persist local schedule state or migrations.
+- Entity identity is based on inverter rule identity (or deterministic fallback identity) to reduce entity churn when order changes.
+
+## TOU Services
+
+- `fronius_tdc.add_schedule`
+  - Required fields: `active`, `schedule_type`, `power`, `start`, `end`, `weekdays`
+  - Optional: `config_entry_id` when multiple inverters are configured
+- `fronius_tdc.remove_schedule`
+  - Target by `rule_id` (preferred) or `index`
+  - Optional: `config_entry_id`
 
 ## Limitations
 
