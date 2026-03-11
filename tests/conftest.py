@@ -10,7 +10,7 @@ import pytest
 data = Path(__file__).parent / "data"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_schedule_data():
     """Return mock schedule data from inverter."""
     return json.loads((data / "timeofuse.json").read_text())
