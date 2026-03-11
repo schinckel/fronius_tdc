@@ -503,6 +503,234 @@ class TestCoordinatorAsyncOperations:
         schedules = mock_post.call_args[0][3]["timeofuse"]
         assert schedules[0]["TimeTable"]["Start"] == "12:00"
 
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_add_schedule_appends_rule(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test adding a schedule appends it to the fetched list."""
+        mock_get.return_value = mock_schedule_data
+        coordinator_with_hass.async_refresh = AsyncMock()
+        new_schedule = {
+            "Active": False,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 1500,
+            "TimeTable": {"Start": "12:00", "End": "13:00"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": False,
+                "Wed": False,
+                "Thu": False,
+                "Fri": False,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+
+        await coordinator_with_hass.async_add_schedule(new_schedule)
+
+        schedules = mock_post.call_args[0][3]["timeofuse"]
+        assert len(schedules) == len(mock_schedule_data["timeofuse"]) + 1
+        assert schedules[-1] == new_schedule
+        coordinator_with_hass.async_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_add_schedule_invalid_rule(self, coordinator_with_hass):
+        """Test adding an invalid schedule raises UpdateFailed."""
+        with pytest.raises(UpdateFailed, match="Invalid schedule update"):
+            await coordinator_with_hass.async_add_schedule({"Active": True})
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_add_schedule_get_request_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test add_schedule surfaces GET request failures."""
+        mock_get.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Cannot reach"):
+            await coordinator_with_hass.async_add_schedule(
+                {
+                    "Active": False,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "12:00", "End": "13:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": False,
+                        "Thu": False,
+                        "Fri": False,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_add_schedule_get_invalid_payload(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test add_schedule surfaces invalid fetched payloads."""
+        mock_get.return_value = {"timeofuse": [{"Active": True}]}
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule payload"):
+            await coordinator_with_hass.async_add_schedule(
+                {
+                    "Active": False,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "12:00", "End": "13:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": False,
+                        "Thu": False,
+                        "Fri": False,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_add_schedule_get_http_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test add_schedule surfaces GET HTTP failures."""
+        mock_get.side_effect = requests.HTTPError("500 Server Error")
+
+        with pytest.raises(UpdateFailed, match="HTTP error"):
+            await coordinator_with_hass.async_add_schedule(
+                {
+                    "Active": False,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "12:00", "End": "13:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": False,
+                        "Thu": False,
+                        "Fri": False,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_add_schedule_post_request_error(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test add_schedule surfaces POST request failures."""
+        mock_get.return_value = mock_schedule_data
+        mock_post.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Failed to add schedule"):
+            await coordinator_with_hass.async_add_schedule(
+                {
+                    "Active": False,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 1000,
+                    "TimeTable": {"Start": "12:00", "End": "13:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": False,
+                        "Thu": False,
+                        "Fri": False,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_remove_schedule_removes_rule(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test removing a schedule deletes only the targeted entry."""
+        mock_get.return_value = mock_schedule_data
+        coordinator_with_hass.async_refresh = AsyncMock()
+
+        await coordinator_with_hass.async_remove_schedule(1)
+
+        schedules = mock_post.call_args[0][3]["timeofuse"]
+        assert len(schedules) == len(mock_schedule_data["timeofuse"]) - 1
+        assert schedules[0] == _normalize_rule(
+            _strip_meta(mock_schedule_data["timeofuse"][0])
+        )
+        assert (
+            _normalize_rule(_strip_meta(mock_schedule_data["timeofuse"][1]))
+            not in schedules
+        )
+        coordinator_with_hass.async_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_remove_schedule_out_of_range(
+        self, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test removing an unknown schedule index raises UpdateFailed."""
+        mock_get.return_value = mock_schedule_data
+
+        with pytest.raises(UpdateFailed, match="out of range"):
+            await coordinator_with_hass.async_remove_schedule(99)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_remove_schedule_get_http_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test remove_schedule surfaces GET HTTP failures."""
+        mock_get.side_effect = requests.HTTPError("500 Server Error")
+
+        with pytest.raises(UpdateFailed, match="HTTP error"):
+            await coordinator_with_hass.async_remove_schedule(0)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_remove_schedule_get_invalid_payload(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test remove_schedule surfaces invalid fetched payloads."""
+        mock_get.return_value = {"timeofuse": [{"Active": True}]}
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule payload"):
+            await coordinator_with_hass.async_remove_schedule(0)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_remove_schedule_get_request_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test remove_schedule surfaces GET request failures."""
+        mock_get.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Cannot reach"):
+            await coordinator_with_hass.async_remove_schedule(0)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_remove_schedule_post_request_error(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test remove_schedule surfaces POST request failures."""
+        mock_get.return_value = mock_schedule_data
+        mock_post.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Failed to remove schedule 1"):
+            await coordinator_with_hass.async_remove_schedule(1)
+
 
 class TestScheduleValidationHelpers:
     """Test schema normalization and validator helpers."""

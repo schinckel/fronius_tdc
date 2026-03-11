@@ -5,6 +5,9 @@ from logging import Logger, getLogger
 LOGGER: Logger = getLogger(__package__)
 
 DOMAIN = "fronius_tdc"
+SERVICE_ADD_SCHEDULE = "add_schedule"
+SERVICE_REMOVE_SCHEDULE = "remove_schedule"
+ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 CONF_HOST = "host"
 CONF_PORT = "port"

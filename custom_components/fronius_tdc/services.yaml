@@ -1,0 +1,86 @@
+add_schedule:
+  name: Add Schedule
+  description: Create a new time-of-use schedule on the inverter and reload entities.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: Required when multiple Fronius entries are configured.
+      example: 0123456789abcdef0123456789abcdef
+      selector:
+        text:
+    schedule_type:
+      name: Schedule Type
+      description: Charging or discharging mode for the new schedule.
+      required: true
+      selector:
+        select:
+          options:
+            - CHARGE_MAX
+            - CHARGE_MIN
+            - DISCHARGE_MAX
+            - DISCHARGE_MIN
+    start:
+      name: Start Time
+      description: Start time in HH:MM 24-hour format.
+      required: true
+      example: "08:00"
+      selector:
+        text:
+    end:
+      name: End Time
+      description: End time in HH:MM 24-hour format.
+      required: true
+      example: "18:00"
+      selector:
+        text:
+    weekdays:
+      name: Weekdays
+      description: Days on which the schedule should apply.
+      required: true
+      selector:
+        select:
+          multiple: true
+          options:
+            - Mon
+            - Tue
+            - Wed
+            - Thu
+            - Fri
+            - Sat
+            - Sun
+    active:
+      name: Active
+      description: Whether the schedule starts enabled.
+      default: false
+      selector:
+        boolean:
+    power:
+      name: Power
+      description: Schedule power in watts.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2000000000
+          step: 1
+          mode: box
+
+remove_schedule:
+  name: Remove Schedule
+  description: Delete an existing time-of-use schedule by index and reload entities.
+  fields:
+    config_entry_id:
+      name: Config Entry ID
+      description: Required when multiple Fronius entries are configured.
+      example: 0123456789abcdef0123456789abcdef
+      selector:
+        text:
+    index:
+      name: Schedule Index
+      description: Zero-based index of the schedule to remove.
+      required: true
+      selector:
+        number:
+          min: 0
+          step: 1
+          mode: box

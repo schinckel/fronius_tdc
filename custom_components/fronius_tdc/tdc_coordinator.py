@@ -221,6 +221,32 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
             msg = f"Cannot reach Fronius inverter: {err}"
             raise UpdateFailed(msg) from err
 
+    async def _async_write_schedules(
+        self,
+        schedules: list[dict[str, Any]],
+        *,
+        operation: str,
+    ) -> None:
+        """Validate, write, and refresh the full schedule list."""
+        try:
+            normalized_schedules = _normalize_schedules(schedules)
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update during {operation}: {err}"
+            raise UpdateFailed(msg) from err
+
+        try:
+            await self.hass.async_add_executor_job(
+                self._blocking_post, normalized_schedules
+            )
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update during {operation}: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.RequestException as err:
+            msg = f"Failed to {operation}: {err}"
+            raise UpdateFailed(msg) from err
+
+        await self.async_refresh()
+
     async def _async_read_modify_write(
         self, index: int, mutate: Callable[[dict[str, Any]], None], *, operation: str
     ) -> None:
@@ -244,23 +270,14 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
 
         try:
             mutate(updated_schedules[index])
-            updated_schedules = _normalize_schedules(updated_schedules)
         except (ValueError, TypeError) as err:
             msg = f"Invalid schedule update for index {index}: {err}"
             raise UpdateFailed(msg) from err
 
-        try:
-            await self.hass.async_add_executor_job(
-                self._blocking_post, updated_schedules
-            )
-        except (ValueError, TypeError) as err:
-            msg = f"Invalid schedule update for index {index}: {err}"
-            raise UpdateFailed(msg) from err
-        except requests.RequestException as err:
-            msg = f"Failed to {operation} for schedule {index}: {err}"
-            raise UpdateFailed(msg) from err
-
-        await self.async_refresh()
+        await self._async_write_schedules(
+            updated_schedules,
+            operation=f"{operation} for schedule {index}",
+        )
 
     async def _async_update_rule_field(
         self, index: int, *, field_path: tuple[str, ...], value: Any, operation: str
@@ -296,6 +313,55 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
             field_path=("Active",),
             value=active,
             operation="set active",
+        )
+
+    async def async_add_schedule(self, schedule: dict[str, Any]) -> None:
+        """Add one schedule entry and push the full updated list."""
+        try:
+            normalized_schedule = _normalize_rule(_strip_meta(schedule))
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update during add schedule: {err}"
+            raise UpdateFailed(msg) from err
+
+        try:
+            schedules = await self.hass.async_add_executor_job(self._blocking_get)
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule payload from inverter: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.HTTPError as err:
+            msg = f"HTTP error from inverter: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.RequestException as err:
+            msg = f"Cannot reach Fronius inverter: {err}"
+            raise UpdateFailed(msg) from err
+
+        updated_schedules = deepcopy(schedules)
+        updated_schedules.append(normalized_schedule)
+        await self._async_write_schedules(updated_schedules, operation="add schedule")
+
+    async def async_remove_schedule(self, index: int) -> None:
+        """Remove one schedule entry and push the full updated list."""
+        try:
+            schedules = await self.hass.async_add_executor_job(self._blocking_get)
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule payload from inverter: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.HTTPError as err:
+            msg = f"HTTP error from inverter: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.RequestException as err:
+            msg = f"Cannot reach Fronius inverter: {err}"
+            raise UpdateFailed(msg) from err
+
+        updated_schedules = deepcopy(schedules)
+        if index < 0 or index >= len(updated_schedules):
+            msg = f"Schedule index {index} out of range"
+            raise UpdateFailed(msg)
+
+        updated_schedules.pop(index)
+        await self._async_write_schedules(
+            updated_schedules,
+            operation=f"remove schedule {index}",
         )
 
     def test_connection_blocking(self) -> list[dict]:
