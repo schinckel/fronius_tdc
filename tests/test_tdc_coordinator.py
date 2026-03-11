@@ -248,12 +248,13 @@ class TestCoordinatorAsyncOperations:
         assert "_Active_meta" not in result[0]
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_to_true(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
     ):
         """Test toggling a schedule to active."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
+        mock_get.return_value = mock_schedule_data
         coordinator_with_hass.async_refresh = AsyncMock()
 
         await coordinator_with_hass.async_set_active(0, active=True)
@@ -264,12 +265,13 @@ class TestCoordinatorAsyncOperations:
         coordinator_with_hass.async_refresh.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_to_false(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
     ):
         """Test toggling a schedule to inactive."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
+        mock_get.return_value = mock_schedule_data
         coordinator_with_hass.async_refresh = AsyncMock()
 
         await coordinator_with_hass.async_set_active(0, active=False)
@@ -284,31 +286,91 @@ class TestCoordinatorAsyncOperations:
         self, coordinator_with_hass, mock_schedule_data
     ):
         """Test that out-of-range index returns early with error log."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
+        with patch(
+            "custom_components.fronius_tdc.tdc_coordinator.fronius_get_json"
+        ) as mock_get:
+            mock_get.return_value = mock_schedule_data
 
-        await coordinator_with_hass.async_set_active(99, active=True)
+            await coordinator_with_hass.async_set_active(99, active=True)
 
         # Method should return early without raising; async_refresh should not be called
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    async def test_async_set_active_request_error(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
+    async def test_async_set_active_out_of_range_skips_post_and_refresh(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
     ):
-        """Test that request errors are properly raised as UpdateFailed."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
-        mock_post.side_effect = requests.ConnectionError("Cannot reach host")
+        """Test that out-of-range index does not post or refresh."""
+        mock_get.return_value = mock_schedule_data
+        coordinator_with_hass.async_refresh = AsyncMock()
 
-        with pytest.raises(UpdateFailed, match="Failed to update schedule"):
+        await coordinator_with_hass.async_set_active(99, active=True)
+
+        mock_post.assert_not_called()
+        coordinator_with_hass.async_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_set_active_get_http_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test that HTTP errors during write read phase raise UpdateFailed."""
+        mock_get.side_effect = requests.HTTPError("500 Server Error")
+
+        with pytest.raises(UpdateFailed, match="HTTP error"):
             await coordinator_with_hass.async_set_active(0, active=True)
 
     @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_set_active_get_request_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test that request errors during write read phase raise UpdateFailed."""
+        mock_get.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Cannot reach"):
+            await coordinator_with_hass.async_set_active(0, active=True)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_set_active_uses_latest_fetched_schedules(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test that write path uses fresh inverter data, not stale coordinator data."""
+        mock_get.return_value = mock_schedule_data
+        coordinator_with_hass.async_refresh = AsyncMock()
+        coordinator_with_hass.data = [{"Active": False}]
+
+        await coordinator_with_hass.async_set_active(0, active=False)
+
+        schedules = mock_post.call_args[0][3]["timeofuse"]
+        assert len(schedules) == len(mock_schedule_data["timeofuse"])
+        assert schedules[0]["Active"] is False
+        assert schedules[1]["Active"] == mock_schedule_data["timeofuse"][1]["Active"]
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_set_active_request_error(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test that request errors are properly raised as UpdateFailed."""
+        mock_get.return_value = mock_schedule_data
+        mock_post.side_effect = requests.ConnectionError("Cannot reach host")
+
+        with pytest.raises(UpdateFailed, match="Failed to set active for schedule"):
+            await coordinator_with_hass.async_set_active(0, active=True)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_preserves_other_schedules(
-        self, mock_post, coordinator_with_hass, mock_schedule_data
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
     ):
         """Test that toggling one schedule doesn't affect others."""
-        coordinator_with_hass.data = mock_schedule_data["timeofuse"]
+        mock_get.return_value = mock_schedule_data
         coordinator_with_hass.async_refresh = AsyncMock()
 
         await coordinator_with_hass.async_set_active(1, active=False)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -106,6 +107,36 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
             msg = f"Cannot reach Fronius inverter: {err}"
             raise UpdateFailed(msg) from err
 
+    async def _async_read_modify_write(
+        self, index: int, mutate: Any, *, operation: str
+    ) -> None:
+        """Fetch latest schedules, mutate one entry, write full list, refresh."""
+        try:
+            schedules = await self.hass.async_add_executor_job(self._blocking_get)
+        except requests.HTTPError as err:
+            msg = f"HTTP error from inverter: {err}"
+            raise UpdateFailed(msg) from err
+        except requests.RequestException as err:
+            msg = f"Cannot reach Fronius inverter: {err}"
+            raise UpdateFailed(msg) from err
+
+        updated_schedules = deepcopy(schedules)
+        if index >= len(updated_schedules):
+            _LOGGER.error("Schedule index %d out of range", index)
+            return
+
+        mutate(updated_schedules[index])
+
+        try:
+            await self.hass.async_add_executor_job(
+                self._blocking_post, updated_schedules
+            )
+        except requests.RequestException as err:
+            msg = f"Failed to {operation} for schedule {index}: {err}"
+            raise UpdateFailed(msg) from err
+
+        await self.async_refresh()
+
     async def async_set_active(self, index: int, *, active: bool) -> None:
         """
         Toggle the Active flag on one schedule entry and push the full list back.
@@ -113,18 +144,11 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
         The inverter's API only supports writing the full list of schedules,
         so we read-modify-write the entire list here.
         """
-        schedules = [dict(s) for s in (self.data or [])]
-        if index >= len(schedules):
-            _LOGGER.error("Schedule index %d out of range", index)
-            return
-        schedules[index] = dict(schedules[index])
-        schedules[index]["Active"] = active
-        try:
-            await self.hass.async_add_executor_job(self._blocking_post, schedules)
-        except requests.RequestException as err:
-            msg = f"Failed to update schedule {index}: {err}"
-            raise UpdateFailed(msg) from err
-        await self.async_refresh()
+        await self._async_read_modify_write(
+            index,
+            mutate=lambda schedule: schedule.__setitem__("Active", active),
+            operation="set active",
+        )
 
     def test_connection_blocking(self) -> list[dict]:
         """Test connection by performing a single GET request."""
