@@ -11,7 +11,12 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.fronius_tdc.tdc_coordinator import (
     FroniusTDCCoordinator,
+    _normalize_rule,
+    _normalize_schedules,
     _strip_meta,
+    _validate_schedule_type,
+    _validate_time_value,
+    _validate_weekdays,
 )
 
 
@@ -99,26 +104,46 @@ class TestFroniusTDCCoordinator:
         mock_get.assert_called_once()
 
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
-    def test_blocking_post(self, mock_post, coordinator) -> None:
+    def test_blocking_post(self, mock_post, coordinator, mock_schedule_data) -> None:
         """Test _blocking_post method."""
-        schedules = [
-            {"Active": True, "ScheduleType": "CHARGE_MAX"},
-            {"Active": False, "ScheduleType": "DISCHARGE_MAX"},
-        ]
+        schedules = mock_schedule_data["timeofuse"]
 
         coordinator._blocking_post(schedules)
 
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert call_args[0][0] == coordinator._url
-        assert call_args[0][3] == {"timeofuse": schedules}
+        assert call_args[0][3] == {
+            "timeofuse": _normalize_schedules([_strip_meta(rule) for rule in schedules])
+        }
 
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     def test_blocking_get_with_metadata_stripping(self, mock_get, coordinator) -> None:
         """Test that _blocking_get strips metadata fields."""
         raw_data = {
             "timeofuse": [
-                {"Active": True, "_Id": 1, "_Meta": "hidden"},
+                {
+                    "Active": True,
+                    "ScheduleType": "DISCHARGE_MIN",
+                    "Power": 1000,
+                    "TimeTable": {
+                        "Start": "09:00",
+                        "End": "11:00",
+                        "_Meta": "hidden",
+                    },
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": True,
+                        "Thu": False,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                        "_Meta": "hidden",
+                    },
+                    "_Id": 1,
+                    "_Meta": "hidden",
+                },
             ]
         }
         mock_get.return_value = raw_data
@@ -126,7 +151,10 @@ class TestFroniusTDCCoordinator:
         result = coordinator._blocking_get()
 
         assert len(result) == 1
-        assert result[0] == {"Active": True}
+        assert result[0]["Active"] is True
+        assert result[0]["ScheduleType"] == "DISCHARGE_MIN"
+        assert result[0]["Power"] == 1000
+        assert result[0]["TimeTable"] == {"Start": "09:00", "End": "11:00"}
         assert "_Id" not in result[0]
         assert "_Meta" not in result[0]
 
@@ -249,6 +277,17 @@ class TestCoordinatorAsyncOperations:
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_update_data_invalid_payload(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test malformed inverter schedule payload is surfaced as UpdateFailed."""
+        mock_get.return_value = {"timeofuse": [{"Active": True}]}
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule payload"):
+            await coordinator_with_hass._async_update_data()
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_to_true(
         self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
@@ -334,6 +373,17 @@ class TestCoordinatorAsyncOperations:
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_set_active_get_value_error(
+        self, mock_get, coordinator_with_hass
+    ):
+        """Test invalid inverter payload during write read phase raises UpdateFailed."""
+        mock_get.return_value = {"timeofuse": [{"Active": True}]}
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule payload"):
+            await coordinator_with_hass.async_set_active(0, active=True)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
     async def test_async_set_active_uses_latest_fetched_schedules(
         self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
@@ -381,3 +431,274 @@ class TestCoordinatorAsyncOperations:
         assert schedules[0]["Active"] is True
         # Second schedule should be toggled
         assert schedules[1]["Active"] is False
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_set_active_invalid_update_value(
+        self, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test invalid field update value is rejected before POST."""
+        mock_get.return_value = mock_schedule_data
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule update"):
+            await coordinator_with_hass.async_set_active(0, active="yes")
+
+    @pytest.mark.asyncio
+    async def test_async_update_rule_field_requires_path(self, coordinator_with_hass):
+        """Test update helper requires a non-empty field path."""
+        with pytest.raises(ValueError, match="field_path must not be empty"):
+            await coordinator_with_hass._async_update_rule_field(
+                0,
+                field_path=(),
+                value=True,
+                operation="set value",
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    async def test_async_update_rule_field_invalid_nested_path(
+        self, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test update helper rejects nested path when parent object is missing."""
+        mock_get.return_value = mock_schedule_data
+
+        with pytest.raises(UpdateFailed, match="must be an object"):
+            await coordinator_with_hass._async_update_rule_field(
+                0,
+                field_path=("NotThere", "Value"),
+                value=True,
+                operation="set nested value",
+            )
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_set_active_post_value_error(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test ValueError from post phase is raised as UpdateFailed."""
+        mock_get.return_value = mock_schedule_data
+        mock_post.side_effect = ValueError("invalid payload")
+
+        with pytest.raises(UpdateFailed, match="Invalid schedule update"):
+            await coordinator_with_hass.async_set_active(0, active=True)
+
+    @pytest.mark.asyncio
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_get_json")
+    @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
+    async def test_async_update_rule_field_nested_success(
+        self, mock_post, mock_get, coordinator_with_hass, mock_schedule_data
+    ):
+        """Test nested field updates traverse and mutate child object path."""
+        mock_get.return_value = mock_schedule_data
+        coordinator_with_hass.async_refresh = AsyncMock()
+
+        await coordinator_with_hass._async_update_rule_field(
+            0,
+            field_path=("TimeTable", "Start"),
+            value="12:00",
+            operation="set start",
+        )
+
+        schedules = mock_post.call_args[0][3]["timeofuse"]
+        assert schedules[0]["TimeTable"]["Start"] == "12:00"
+
+
+class TestScheduleValidationHelpers:
+    """Test schema normalization and validator helpers."""
+
+    def test_validate_schedule_type_valid(self) -> None:
+        """Test all supported schedule types are accepted."""
+        for value in ("CHARGE_MAX", "CHARGE_MIN", "DISCHARGE_MAX", "DISCHARGE_MIN"):
+            _validate_schedule_type(value)
+
+    def test_validate_schedule_type_invalid(self) -> None:
+        """Test unsupported schedule type is rejected."""
+        with pytest.raises(ValueError, match="Unsupported ScheduleType"):
+            _validate_schedule_type("INVALID")
+
+    def test_validate_schedule_type_requires_string(self) -> None:
+        """Test non-string schedule type is rejected."""
+        with pytest.raises(TypeError, match="must be a string"):
+            _validate_schedule_type(123)
+
+    def test_validate_time_value_rejects_non_hhmm(self) -> None:
+        """Test strict HH:MM validation."""
+        with pytest.raises(ValueError, match="HH:MM"):
+            _validate_time_value("9:00", "TimeTable.Start")
+
+    def test_validate_time_value_rejects_non_string(self) -> None:
+        """Test non-string time values are rejected."""
+        with pytest.raises(TypeError, match="HH:MM"):
+            _validate_time_value(900, "TimeTable.Start")
+
+    def test_validate_weekdays_requires_object(self) -> None:
+        """Test weekday validator rejects non-object payloads."""
+        with pytest.raises(TypeError, match="must be an object"):
+            _validate_weekdays([])
+
+    def test_validate_weekdays_missing_day(self) -> None:
+        """Test weekday validator rejects incomplete maps."""
+        with pytest.raises(ValueError, match="missing keys"):
+            _validate_weekdays(
+                {
+                    "Mon": True,
+                    "Tue": True,
+                    "Wed": True,
+                    "Thu": True,
+                    "Fri": True,
+                    "Sat": True,
+                }
+            )
+
+    def test_validate_weekdays_rejects_non_boolean_value(self) -> None:
+        """Test weekday validator rejects non-boolean day values."""
+        with pytest.raises(TypeError, match="must be a boolean"):
+            _validate_weekdays(
+                {
+                    "Mon": 1,
+                    "Tue": False,
+                    "Wed": True,
+                    "Thu": False,
+                    "Fri": True,
+                    "Sat": False,
+                    "Sun": False,
+                }
+            )
+
+    def test_normalize_rule_requires_object(self) -> None:
+        """Test rule normalizer rejects non-object payloads."""
+        with pytest.raises(TypeError, match="must be an object"):
+            _normalize_rule([])
+
+    def test_normalize_rule_missing_required_keys(self) -> None:
+        """Test rule normalizer rejects partial payloads."""
+        with pytest.raises(ValueError, match="missing required keys"):
+            _normalize_rule({"Active": True})
+
+    def test_normalize_rule_requires_boolean_active(self) -> None:
+        """Test Active must be a boolean."""
+        with pytest.raises(TypeError, match="Active must be a boolean"):
+            _normalize_rule(
+                {
+                    "Active": "true",
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 3000,
+                    "TimeTable": {"Start": "08:00", "End": "10:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": True,
+                        "Thu": False,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    def test_normalize_rule_rejects_boolean_power(self) -> None:
+        """Test Power rejects booleans even though bool is int-like in Python."""
+        with pytest.raises(TypeError, match="Power must be an integer"):
+            _normalize_rule(
+                {
+                    "Active": True,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": True,
+                    "TimeTable": {"Start": "08:00", "End": "10:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": True,
+                        "Thu": False,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    def test_normalize_rule_requires_timetable_object(self) -> None:
+        """Test TimeTable must be an object."""
+        with pytest.raises(TypeError, match="TimeTable must be an object"):
+            _normalize_rule(
+                {
+                    "Active": True,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 3000,
+                    "TimeTable": "08:00-10:00",
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": True,
+                        "Thu": False,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    def test_normalize_rule_missing_timetable_keys(self) -> None:
+        """Test TimeTable requires Start and End keys."""
+        with pytest.raises(ValueError, match="TimeTable missing required keys"):
+            _normalize_rule(
+                {
+                    "Active": True,
+                    "ScheduleType": "CHARGE_MAX",
+                    "Power": 3000,
+                    "TimeTable": {"Start": "08:00"},
+                    "Weekdays": {
+                        "Mon": True,
+                        "Tue": False,
+                        "Wed": True,
+                        "Thu": False,
+                        "Fri": True,
+                        "Sat": False,
+                        "Sun": False,
+                    },
+                }
+            )
+
+    def test_normalize_rule_keeps_canonical_shape(self) -> None:
+        """Test normalization keeps the canonical rule shape."""
+        result = _normalize_rule(
+            {
+                "Active": True,
+                "ScheduleType": "CHARGE_MAX",
+                "Power": 3000,
+                "TimeTable": {"Start": "08:00", "End": "10:00", "Extra": "x"},
+                "Weekdays": {
+                    "Mon": True,
+                    "Tue": False,
+                    "Wed": True,
+                    "Thu": False,
+                    "Fri": True,
+                    "Sat": False,
+                    "Sun": False,
+                    "Extra": True,
+                },
+                "Extra": "ignored",
+            }
+        )
+
+        assert result == {
+            "Active": True,
+            "ScheduleType": "CHARGE_MAX",
+            "Power": 3000,
+            "TimeTable": {"Start": "08:00", "End": "10:00"},
+            "Weekdays": {
+                "Mon": True,
+                "Tue": False,
+                "Wed": True,
+                "Thu": False,
+                "Fri": True,
+                "Sat": False,
+                "Sun": False,
+            },
+        }
+
+    def test_normalize_schedules_requires_list(self) -> None:
+        """Test schedule list normalization rejects non-list payload."""
+        with pytest.raises(TypeError, match="must be a list"):
+            _normalize_schedules({"not": "a list"})
