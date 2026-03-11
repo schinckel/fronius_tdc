@@ -1,6 +1,13 @@
 """Constants for integration_blueprint."""
 
+from dataclasses import dataclass, field
 from logging import Logger, getLogger
+from typing import Any
+
+from homeassistant.components.number import NumberEntityDescription
+from homeassistant.components.select import SelectEntityDescription
+from homeassistant.components.switch import SwitchEntityDescription
+from homeassistant.helpers.entity import EntityDescription
 
 LOGGER: Logger = getLogger(__package__)
 
@@ -27,6 +34,113 @@ SCHEDULE_TYPE_LABELS = {
     "DISCHARGE_MAX": "Discharge Max",
     "DISCHARGE_MIN": "Discharge Min",
 }
+SCHEDULE_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+type ScheduleValuePath = tuple[str, ...]
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScheduleEntityDescription(EntityDescription):
+    """Descriptor metadata for one editable schedule field."""
+
+    value_path: ScheduleValuePath
+    setter_name: str
+    setter_value_parameter: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScheduleSwitchEntityDescription(
+    ScheduleEntityDescription, SwitchEntityDescription
+):
+    """Descriptor for a schedule-backed switch entity."""
+
+    setter_args: tuple[Any, ...] = ()
+    entity_id_suffix: str = ""
+    unique_id_suffix: str = ""
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScheduleNumberEntityDescription(
+    ScheduleEntityDescription, NumberEntityDescription
+):
+    """Descriptor for a schedule-backed number entity."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScheduleSelectEntityDescription(
+    ScheduleEntityDescription, SelectEntityDescription
+):
+    """Descriptor for a schedule-backed select entity."""
+
+    option_to_value: dict[str, str] = field(default_factory=dict)
+    value_to_option: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScheduleTimeEntityDescription(ScheduleEntityDescription):
+    """Descriptor for a schedule-backed time-like entity."""
+
+
+SCHEDULE_ACTIVE_SWITCH_DESCRIPTION = ScheduleSwitchEntityDescription(
+    key="active",
+    name="Active",
+    value_path=("Active",),
+    setter_name="async_set_active",
+    setter_value_parameter="active",
+    entity_id_suffix="active",
+)
+
+SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS = tuple(
+    ScheduleSwitchEntityDescription(
+        key=f"weekday_{day.lower()}",
+        name=day,
+        value_path=("Weekdays", day),
+        setter_name="async_set_weekday",
+        setter_value_parameter="enabled",
+        setter_args=(day,),
+        entity_id_suffix=day.lower(),
+        unique_id_suffix=f"weekday_{day.lower()}",
+    )
+    for day in SCHEDULE_WEEKDAYS
+)
+
+SCHEDULE_POWER_NUMBER_DESCRIPTION = ScheduleNumberEntityDescription(
+    key="power",
+    name="Power",
+    value_path=("Power",),
+    setter_name="async_set_power",
+    setter_value_parameter="power",
+    native_min_value=0,
+    native_max_value=200000,
+    native_step=100,
+)
+
+SCHEDULE_TYPE_SELECT_DESCRIPTION = ScheduleSelectEntityDescription(
+    key="schedule_type",
+    name="Schedule Type",
+    value_path=("ScheduleType",),
+    setter_name="async_set_schedule_type",
+    setter_value_parameter="schedule_type",
+    options=list(SCHEDULE_TYPE_LABELS.values()),
+    option_to_value={label: value for value, label in SCHEDULE_TYPE_LABELS.items()},
+    value_to_option=dict(SCHEDULE_TYPE_LABELS),
+)
+
+SCHEDULE_START_TIME_DESCRIPTION = ScheduleTimeEntityDescription(
+    key="start_time",
+    name="Start Time",
+    value_path=("TimeTable", "Start"),
+    setter_name="async_set_start_time",
+    setter_value_parameter="start",
+)
+
+SCHEDULE_END_TIME_DESCRIPTION = ScheduleTimeEntityDescription(
+    key="end_time",
+    name="End Time",
+    value_path=("TimeTable", "End"),
+    setter_name="async_set_end_time",
+    setter_value_parameter="end",
+)
 
 # Battery configuration keys mapping: key → platform type
 BATTERY_CONFIG_KEYS = {

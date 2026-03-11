@@ -6,9 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.fronius_tdc.const import DOMAIN
+from custom_components.fronius_tdc.const import (
+    DOMAIN,
+    SCHEDULE_ACTIVE_SWITCH_DESCRIPTION,
+    SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS,
+)
 from custom_components.fronius_tdc.switch import (
     FroniusBatterySwitch,
+    FroniusScheduleEntity,
+    FroniusScheduleFieldSwitch,
     FroniusScheduleSwitch,
     async_setup_entry,
 )
@@ -42,8 +48,61 @@ class TestFroniusScheduleSwitch:
         assert switch._index == 0
         assert switch._attr_unique_id == "test_entry_123_schedule_0"
         assert switch.entity_id == "switch.test_inverter_schedule_0_active"
+        assert switch.entity_description == SCHEDULE_ACTIVE_SWITCH_DESCRIPTION
         assert switch._attr_device_info["manufacturer"] == "Fronius"
         assert switch._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
+
+    def test_schedule_entity_nested_value_lookup(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test the shared schedule helper resolves nested paths."""
+        entity = FroniusScheduleEntity(coordinator_mock, config_entry_mock, 0)
+
+        assert entity._get_schedule_value(("TimeTable", "Start")) == "18:00"
+        assert entity._get_schedule_value(("Weekdays", "Mon")) is True
+        assert entity._get_schedule_value(("Missing",)) is None
+        assert entity._get_schedule_value(("Power", "Nested")) is None
+
+    @pytest.mark.asyncio
+    async def test_descriptor_switch_dispatches_configured_setter(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test generic schedule switch dispatches through its descriptor."""
+        coordinator_mock.async_set_active = AsyncMock()
+        switch = FroniusScheduleFieldSwitch(
+            coordinator_mock,
+            config_entry_mock,
+            0,
+            SCHEDULE_ACTIVE_SWITCH_DESCRIPTION,
+        )
+
+        await switch.async_turn_on()
+        await switch.async_turn_off()
+
+        assert switch.is_on is True
+        coordinator_mock.async_set_active.assert_any_call(index=0, active=True)
+        coordinator_mock.async_set_active.assert_any_call(index=0, active=False)
+
+    @pytest.mark.asyncio
+    async def test_descriptor_switch_dispatches_with_extra_setter_args(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test generic schedule switch dispatches weekday-style setter args."""
+        coordinator_mock.async_set_weekday = AsyncMock()
+        switch = FroniusScheduleFieldSwitch(
+            coordinator_mock,
+            config_entry_mock,
+            0,
+            SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS[0],
+        )
+
+        await switch.async_turn_on()
+
+        coordinator_mock.async_set_weekday.assert_called_once_with(
+            0,
+            "Mon",
+            enabled=True,
+        )
 
     def test_switch_name_property(self, switch) -> None:
         """Test switch name generation."""
@@ -138,7 +197,9 @@ class TestFroniusScheduleSwitch:
 
         await switch.async_turn_on()
 
-        switch.coordinator.async_set_active.assert_called_once_with(0, active=True)
+        switch.coordinator.async_set_active.assert_called_once_with(
+            index=0, active=True
+        )
 
     @pytest.mark.asyncio
     async def test_async_turn_off(self, switch) -> None:
@@ -457,7 +518,7 @@ class TestSwitchEdgeCases:
 
         await switch.async_turn_on(extra_param="ignored")
 
-        coordinator_mock.async_set_active.assert_called_once_with(0, active=True)
+        coordinator_mock.async_set_active.assert_called_once_with(index=0, active=True)
 
     @pytest.mark.asyncio
     async def test_switch_turn_off_with_kwargs(

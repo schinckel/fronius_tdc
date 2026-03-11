@@ -19,7 +19,9 @@ from .const import (
     BATTERY_CONFIG_KEYS,
     BATTERY_CONFIG_LABELS,
     DOMAIN,
+    SCHEDULE_ACTIVE_SWITCH_DESCRIPTION,
     SCHEDULE_TYPE_LABELS,
+    ScheduleSwitchEntityDescription,
 )
 from .tdc_coordinator import FroniusTDCCoordinator
 
@@ -80,8 +82,8 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEntity):
-    """Switch that activates/deactivates one Time of Use schedule."""
+class FroniusScheduleEntity(CoordinatorEntity[FroniusTDCCoordinator]):
+    """Common schedule entity helpers shared by per-platform entities."""
 
     def __init__(
         self,
@@ -89,14 +91,12 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         entry: ConfigEntry,
         index: int,
     ) -> None:
-        """Initialize the switch entity."""
+        """Initialize common schedule entity state."""
         super().__init__(coordinator)
         self._index = index
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_schedule_{index}"
-        entry_title = entry.title if isinstance(entry.title, str) else ""
-        base_name = slugify(entry_title) or "fronius_tdc"
-        self.entity_id = f"switch.{base_name}_schedule_{index}_active"
+        self._base_name = slugify(entry.title if isinstance(entry.title, str) else "")
+        self._base_name = self._base_name or "fronius_tdc"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": "Fronius Gen24 Time of Use",
@@ -106,10 +106,91 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
 
     @property
     def _schedule(self) -> dict:
+        """Return the current schedule payload for this entity index."""
         data = self.coordinator.data or []
         if self._index < len(data):
             return data[self._index]
         return {}
+
+    def _get_schedule_value(self, value_path: tuple[str, ...]) -> Any:
+        """Traverse one nested schedule value path."""
+        value: Any = self._schedule
+        for key in value_path:
+            if not isinstance(value, dict):
+                return None
+            value = value.get(key)
+        return value
+
+
+class FroniusScheduleFieldSwitch(FroniusScheduleEntity, SwitchEntity):
+    """Generic switch for one boolean schedule field."""
+
+    entity_description: ScheduleSwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: FroniusTDCCoordinator,
+        entry: ConfigEntry,
+        index: int,
+        description: ScheduleSwitchEntityDescription,
+    ) -> None:
+        """Initialize the descriptor-backed schedule switch."""
+        super().__init__(coordinator, entry, index)
+        self.entity_description = description
+        unique_id_suffix = (
+            f"_{description.unique_id_suffix}" if description.unique_id_suffix else ""
+        )
+        self._attr_unique_id = f"{entry.entry_id}_schedule_{index}{unique_id_suffix}"
+        self.entity_id = (
+            f"switch.{self._base_name}_schedule_{index}_{description.entity_id_suffix}"
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the described schedule field is enabled."""
+        return bool(self._get_schedule_value(self.entity_description.value_path))
+
+    async def _async_set_switch_value(self, *, enabled: bool) -> None:
+        """Dispatch the switch update through the configured coordinator mutator."""
+        setter = getattr(self.coordinator, self.entity_description.setter_name)
+        if self.entity_description.setter_args:
+            await setter(
+                self._index,
+                *self.entity_description.setter_args,
+                **{self.entity_description.setter_value_parameter: enabled},
+            )
+            return
+
+        await setter(
+            index=self._index,
+            **{self.entity_description.setter_value_parameter: enabled},
+        )
+
+    async def async_turn_on(self, **_kwargs: Any) -> None:
+        """Turn on the described schedule field."""
+        await self._async_set_switch_value(enabled=True)
+
+    async def async_turn_off(self, **_kwargs: Any) -> None:
+        """Turn off the described schedule field."""
+        await self._async_set_switch_value(enabled=False)
+
+
+class FroniusScheduleSwitch(FroniusScheduleFieldSwitch):
+    """Switch that activates/deactivates one Time of Use schedule."""
+
+    def __init__(
+        self,
+        coordinator: FroniusTDCCoordinator,
+        entry: ConfigEntry,
+        index: int,
+    ) -> None:
+        """Initialize the switch entity."""
+        super().__init__(
+            coordinator,
+            entry,
+            index,
+            SCHEDULE_ACTIVE_SWITCH_DESCRIPTION,
+        )
 
     @property
     def name(self) -> str:
@@ -170,15 +251,6 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
             "end": tt.get("End"),
             "days": sorted(active_days),
         }
-
-    async def async_turn_on(self, **_kwargs: Any) -> None:
-        """Turn on the schedule by setting its Active flag to True."""
-        await self.coordinator.async_set_active(self._index, active=True)
-
-    async def async_turn_off(self, **_kwargs: Any) -> None:
-        """Turn off the schedule by setting its Active flag to False."""
-        # pass both parameters as keywords; the boolean must not be positional
-        await self.coordinator.async_set_active(index=self._index, active=False)
 
 
 class FroniusBatterySwitch(

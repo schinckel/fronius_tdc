@@ -25,8 +25,6 @@ Implement full TOU rule management in Home Assistant by combining entity-based e
 - `async_set_weekday(index, day, enabled)`.
 - `async_add_schedule(schedule)`.
 - `async_remove_schedule(index)`.
-5. Phase 2: Entity platforms for editable fields.
-- Implement stable unique ID strategy for schedule entities based on rule index or a generated rule ID that remains stable across reorder/add/remove operations (e.g. `fronius_tdc.schedule.{rule_id}.power`).
 6. Refactor schedule entities to `EntityDescription`-style descriptors in `custom_components/fronius_tdc/const.py` plus platform files:
 - Add schedule field descriptors for switch/number/select/time-like controls.
 - Reuse one generic per-platform schedule entity class pattern.
