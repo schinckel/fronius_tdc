@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -93,6 +94,9 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         self._index = index
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_schedule_{index}"
+        entry_title = entry.title if isinstance(entry.title, str) else ""
+        base_name = slugify(entry_title) or "fronius_tdc"
+        self.entity_id = f"switch.{base_name}_schedule_{index}_active"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": "Fronius Gen24 Time of Use",
