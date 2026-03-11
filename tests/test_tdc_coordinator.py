@@ -92,10 +92,10 @@ class TestFroniusTDCCoordinator:
 
         result = coordinator._blocking_get()
 
-        assert len(result) == 2
+        assert len(result) == 5
         assert result[0]["Active"] is True
-        assert result[0]["ScheduleType"] == "CHARGE_MAX"
-        assert "_Id" not in result[0]  # Meta fields stripped
+        assert result[0]["ScheduleType"] == "DISCHARGE_MIN"
+        assert "_Active_meta" not in result[0]  # Meta fields stripped
         mock_get.assert_called_once()
 
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")
@@ -156,7 +156,7 @@ class TestFroniusTDCCoordinator:
 
         result = coordinator.test_connection_blocking()
 
-        assert len(result) == 2
+        assert len(result) == 5
         mock_get.assert_called_once_with(
             coordinator._url,
             coordinator._username,
@@ -243,9 +243,9 @@ class TestCoordinatorAsyncOperations:
 
         result = await coordinator_with_hass._async_update_data()
 
-        assert len(result) == 2
+        assert len(result) == 5
         assert result[0]["Active"] is True
-        assert "_Id" not in result[0]
+        assert "_Active_meta" not in result[0]
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.tdc_coordinator.fronius_post_json")

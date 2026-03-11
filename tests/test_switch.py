@@ -29,6 +29,7 @@ class TestFroniusScheduleSwitch:
         """Create a mock config entry."""
         entry = MagicMock()
         entry.entry_id = "test_entry_123"
+        entry.title = "Test Inverter"
         return entry
 
     @pytest.fixture
@@ -40,12 +41,13 @@ class TestFroniusScheduleSwitch:
         """Test switch initialization."""
         assert switch._index == 0
         assert switch._attr_unique_id == "test_entry_123_schedule_0"
+        assert switch.entity_id == "switch.test_inverter_schedule_0_active"
         assert switch._attr_device_info["manufacturer"] == "Fronius"
         assert switch._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
 
     def test_switch_name_property(self, switch) -> None:
         """Test switch name generation."""
-        expected_name = "Charge Max 3000W 22:00-06:00"
+        expected_name = "Discharge Min 5400W 18:00-21:00"
         assert switch.name == expected_name
 
     def test_switch_name_with_missing_data(
@@ -56,8 +58,10 @@ class TestFroniusScheduleSwitch:
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
         assert switch.name == " 0W ?-?"
 
-    def test_icon_charge_max(self, switch) -> None:
+    def test_icon_charge_max(self, coordinator_mock, config_entry_mock) -> None:
         """Test icon for CHARGE_MAX schedule."""
+        coordinator_mock.data = [{"ScheduleType": "CHARGE_MAX"}]
+        switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
         assert switch.icon == "mdi:battery-arrow-up"
 
     def test_icon_charge_min(self, coordinator_mock, config_entry_mock) -> None:
@@ -103,12 +107,13 @@ class TestFroniusScheduleSwitch:
     def test_extra_state_attributes(self, switch) -> None:
         """Test extra state attributes."""
         attrs = switch.extra_state_attributes
-        assert attrs["schedule_type"] == "CHARGE_MAX"
-        assert attrs["power_w"] == 3000
-        assert attrs["start"] == "22:00"
-        assert attrs["end"] == "06:00"
+        assert attrs["schedule_type"] == "DISCHARGE_MIN"
+        assert attrs["power_w"] == 5400
+        assert attrs["start"] == "18:00"
+        assert attrs["end"] == "21:00"
         assert "Mon" in attrs["days"]
-        assert "Sat" not in attrs["days"]
+        assert "Sat" in attrs["days"]
+        assert len(attrs["days"]) == 7
 
     def test_extra_state_attributes_with_missing_data(
         self, coordinator_mock, config_entry_mock
