@@ -315,6 +315,82 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
             operation="set active",
         )
 
+    async def async_set_power(self, index: int, *, power: int) -> None:
+        """Set schedule power in watts."""
+        if isinstance(power, bool) or not isinstance(power, int):
+            msg = f"Invalid schedule update for index {index}: Power must be an integer"
+            raise UpdateFailed(msg)
+
+        await self._async_update_rule_field(
+            index,
+            field_path=("Power",),
+            value=power,
+            operation="set power",
+        )
+
+    async def async_set_schedule_type(self, index: int, *, schedule_type: str) -> None:
+        """Set schedule type."""
+        try:
+            _validate_schedule_type(schedule_type)
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update for index {index}: {err}"
+            raise UpdateFailed(msg) from err
+
+        await self._async_update_rule_field(
+            index,
+            field_path=("ScheduleType",),
+            value=schedule_type,
+            operation="set schedule type",
+        )
+
+    async def async_set_start_time(self, index: int, *, start: str) -> None:
+        """Set schedule start time with strict HH:MM validation."""
+        try:
+            _validate_time_value(start, "TimeTable.Start")
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update for index {index}: {err}"
+            raise UpdateFailed(msg) from err
+
+        await self._async_update_rule_field(
+            index,
+            field_path=("TimeTable", "Start"),
+            value=start,
+            operation="set start time",
+        )
+
+    async def async_set_end_time(self, index: int, *, end: str) -> None:
+        """Set schedule end time with strict HH:MM validation."""
+        try:
+            _validate_time_value(end, "TimeTable.End")
+        except (ValueError, TypeError) as err:
+            msg = f"Invalid schedule update for index {index}: {err}"
+            raise UpdateFailed(msg) from err
+
+        await self._async_update_rule_field(
+            index,
+            field_path=("TimeTable", "End"),
+            value=end,
+            operation="set end time",
+        )
+
+    async def async_set_weekday(self, index: int, day: str, *, enabled: bool) -> None:
+        """Enable or disable one weekday for a schedule."""
+        if day not in WEEKDAY_KEYS:
+            msg = (
+                f"Invalid schedule update for index {index}: Unsupported weekday: {day}"
+            )
+            raise UpdateFailed(msg)
+        if not isinstance(enabled, bool):
+            msg = f"Invalid schedule update for index {index}: enabled must be boolean"
+            raise UpdateFailed(msg)
+
+        await self._async_update_rule_field(
+            index,
+            field_path=("Weekdays", day),
+            value=enabled,
+            operation=f"set weekday {day}",
+        )
+
     async def async_add_schedule(self, schedule: dict[str, Any]) -> None:
         """Add one schedule entry and push the full updated list."""
         try:

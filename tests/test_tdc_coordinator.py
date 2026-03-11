@@ -732,6 +732,159 @@ class TestCoordinatorAsyncOperations:
             await coordinator_with_hass.async_remove_schedule(1)
 
 
+class TestCoordinatorMutators:
+    """Test explicit coordinator mutator methods used by schedule entities."""
+
+    @pytest.fixture
+    def coordinator(self, mocker):
+        """Create a coordinator with frame-reporting patched."""
+        mocker.patch("homeassistant.helpers.frame.report_usage")
+        config_entry = MagicMock(
+            data={
+                "host": "192.168.1.1",
+                "port": 80,
+                "username": "customer",
+                "password": "password",
+            },
+            spec=ConfigEntry,
+        )
+        return FroniusTDCCoordinator(
+            config_entry=config_entry,
+            hass=MagicMock(),
+            logger=MagicMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_power_dispatch(self, coordinator):
+        """Test set_power dispatches through the shared field updater."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        await coordinator.async_set_power(2, power=4500)
+
+        coordinator._async_update_rule_field.assert_called_once_with(
+            2,
+            field_path=("Power",),
+            value=4500,
+            operation="set power",
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_schedule_type_dispatch(self, coordinator):
+        """Test set_schedule_type dispatches through the shared field updater."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        await coordinator.async_set_schedule_type(1, schedule_type="CHARGE_MAX")
+
+        coordinator._async_update_rule_field.assert_called_once_with(
+            1,
+            field_path=("ScheduleType",),
+            value="CHARGE_MAX",
+            operation="set schedule type",
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_weekday_dispatch(self, coordinator):
+        """Test set_weekday dispatches through the shared field updater."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        await coordinator.async_set_weekday(0, "Mon", enabled=True)
+
+        coordinator._async_update_rule_field.assert_called_once_with(
+            0,
+            field_path=("Weekdays", "Mon"),
+            value=True,
+            operation="set weekday Mon",
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_start_time_dispatch(self, coordinator):
+        """Test set_start_time dispatches through the shared field updater."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        await coordinator.async_set_start_time(0, start="09:30")
+
+        coordinator._async_update_rule_field.assert_called_once_with(
+            0,
+            field_path=("TimeTable", "Start"),
+            value="09:30",
+            operation="set start time",
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_end_time_dispatch(self, coordinator):
+        """Test set_end_time dispatches through the shared field updater."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        await coordinator.async_set_end_time(0, end="23:59")
+
+        coordinator._async_update_rule_field.assert_called_once_with(
+            0,
+            field_path=("TimeTable", "End"),
+            value="23:59",
+            operation="set end time",
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_set_time_rejects_invalid_format(self, coordinator):
+        """Test invalid time values are rejected before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="HH:MM"):
+            await coordinator.async_set_start_time(0, start="24:00")
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_set_power_rejects_non_int(self, coordinator):
+        """Test set_power rejects non-integer values before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="Power must be an integer"):
+            await coordinator.async_set_power(0, power=True)
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_set_schedule_type_rejects_invalid(self, coordinator):
+        """Test set_schedule_type rejects unsupported values before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="Unsupported ScheduleType"):
+            await coordinator.async_set_schedule_type(0, schedule_type="INVALID")
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_set_end_time_rejects_invalid_format(self, coordinator):
+        """Test invalid end times are rejected before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="HH:MM"):
+            await coordinator.async_set_end_time(0, end="9:30")
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_set_weekday_rejects_invalid_day(self, coordinator):
+        """Test set_weekday rejects unsupported day values before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="Unsupported weekday"):
+            await coordinator.async_set_weekday(0, "Foo", enabled=True)
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_async_set_weekday_rejects_non_bool_enabled(self, coordinator):
+        """Test set_weekday rejects non-boolean enabled values before write."""
+        coordinator._async_update_rule_field = AsyncMock()
+
+        with pytest.raises(UpdateFailed, match="enabled must be boolean"):
+            await coordinator.async_set_weekday(0, "Mon", enabled="yes")
+
+        coordinator._async_update_rule_field.assert_not_called()
+
+
 class TestScheduleValidationHelpers:
     """Test schema normalization and validator helpers."""
 

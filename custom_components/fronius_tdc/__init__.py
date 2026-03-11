@@ -33,6 +33,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.SELECT,
+    Platform.TIME,
 ]
 SERVICE_STATE_KEY = "services_registered"
 BATTERIES_COORDINATOR_KEY = "batteries_coordinator"

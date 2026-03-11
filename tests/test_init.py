@@ -291,7 +291,7 @@ class TestAsyncUnloadEntry:
 
         assert result is True
         hass.config_entries.async_unload_platforms.assert_called_once_with(
-            config_entry, ["switch", "number", "select"]
+            config_entry, ["switch", "number", "select", "time"]
         )
         hass.services.async_remove.assert_any_call(DOMAIN, SERVICE_ADD_SCHEDULE)
         hass.services.async_remove.assert_any_call(DOMAIN, SERVICE_REMOVE_SCHEDULE)

@@ -21,6 +21,7 @@ from .const import (
     DOMAIN,
     SCHEDULE_ACTIVE_SWITCH_DESCRIPTION,
     SCHEDULE_TYPE_LABELS,
+    SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS,
     ScheduleSwitchEntityDescription,
 )
 from .tdc_coordinator import FroniusTDCCoordinator
@@ -42,12 +43,17 @@ async def async_setup_entry(
 
     if tdc_coordinator:
         await tdc_coordinator.async_config_entry_first_refresh()
-        entities.extend(
-            [
-                FroniusScheduleSwitch(tdc_coordinator, entry, index)
-                for index in range(len(tdc_coordinator.data or []))
-            ]
-        )
+        for index in range(len(tdc_coordinator.data or [])):
+            entities.append(FroniusScheduleSwitch(tdc_coordinator, entry, index))
+            entities.extend(
+                FroniusScheduleWeekdaySwitch(
+                    tdc_coordinator,
+                    entry,
+                    index,
+                    description,
+                )
+                for description in SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS
+            )
 
     # Set up Battery configuration switches (booleans only)
     batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(
@@ -233,11 +239,6 @@ class FroniusScheduleSwitch(FroniusScheduleFieldSwitch):
         return "mdi:battery-clock"
 
     @property
-    def is_on(self) -> bool:
-        """Return True if the schedule is active, False otherwise."""
-        return bool(self._schedule.get("Active", False))
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes for the schedule, like days of week."""
         s = self._schedule
@@ -251,6 +252,20 @@ class FroniusScheduleSwitch(FroniusScheduleFieldSwitch):
             "end": tt.get("End"),
             "days": sorted(active_days),
         }
+
+
+class FroniusScheduleWeekdaySwitch(FroniusScheduleFieldSwitch):
+    """Switch that toggles one weekday for one Time of Use schedule."""
+
+    def __init__(
+        self,
+        coordinator: FroniusTDCCoordinator,
+        entry: ConfigEntry,
+        index: int,
+        description: ScheduleSwitchEntityDescription,
+    ) -> None:
+        """Initialize the weekday switch entity."""
+        super().__init__(coordinator, entry, index, description)
 
 
 class FroniusBatterySwitch(

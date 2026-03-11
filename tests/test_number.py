@@ -12,6 +12,7 @@ from custom_components.fronius_tdc.number import (
     NUMBER_MIN_MAX,
     PERCENTAGE_KEYS,
     FroniusBatteryNumber,
+    FroniusSchedulePowerNumber,
     async_setup_entry,
 )
 
@@ -283,3 +284,84 @@ class TestAsyncSetupEntry:
         keys = [e._key for e in entities]
         assert "HYB_EM_POWER" in keys
         assert "BAT_M0_SOC_MAX" in keys
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_with_schedule_coordinator_only(self) -> None:
+        """Test setup entry creates schedule power numbers without battery data."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        tdc_coordinator = MagicMock()
+        tdc_coordinator.async_config_entry_first_refresh = AsyncMock()
+        tdc_coordinator.data = [
+            {"Power": 1000, "TimeTable": {"Start": "08:00", "End": "10:00"}},
+            {"Power": 2000, "TimeTable": {"Start": "12:00", "End": "14:00"}},
+        ]
+
+        hass.data = {DOMAIN: {config_entry.entry_id: tdc_coordinator}}
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        tdc_coordinator.async_config_entry_first_refresh.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        assert len(entities) == 2
+        assert all(isinstance(e, FroniusSchedulePowerNumber) for e in entities)
+
+
+class TestFroniusSchedulePowerNumber:
+    """Test FroniusSchedulePowerNumber entity."""
+
+    @pytest.fixture
+    def coordinator_mock(self):
+        """Create a mock TOU coordinator."""
+        coordinator = MagicMock()
+        coordinator.data = [
+            {"Power": 5400, "TimeTable": {"Start": "18:00", "End": "21:00"}}
+        ]
+        return coordinator
+
+    @pytest.fixture
+    def config_entry_mock(self):
+        """Create a mock config entry."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_123"
+        entry.title = "Test Inverter"
+        return entry
+
+    def test_schedule_power_initialization(self, coordinator_mock, config_entry_mock):
+        """Test schedule power entity initialization."""
+        entity = FroniusSchedulePowerNumber(coordinator_mock, config_entry_mock, 0)
+
+        assert entity._attr_unique_id == "test_entry_123_schedule_0_power"
+        assert entity.entity_id == "number.test_inverter_schedule_0_power"
+        assert entity.native_value == 5400.0
+        assert entity.name == "Schedule 1 Power"
+
+    def test_schedule_power_out_of_range_returns_none(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test schedule power returns None when index is out of range."""
+        entity = FroniusSchedulePowerNumber(coordinator_mock, config_entry_mock, 5)
+
+        assert entity.native_value is None
+
+    def test_schedule_power_missing_value_returns_none(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test schedule power returns None when the power field is missing."""
+        coordinator_mock.data = [{"TimeTable": {"Start": "00:00", "End": "01:00"}}]
+        entity = FroniusSchedulePowerNumber(coordinator_mock, config_entry_mock, 0)
+
+        assert entity.native_value is None
+
+    @pytest.mark.asyncio
+    async def test_schedule_power_set_value(self, coordinator_mock, config_entry_mock):
+        """Test schedule power setter uses coordinator mutator."""
+        coordinator_mock.async_set_power = AsyncMock()
+        entity = FroniusSchedulePowerNumber(coordinator_mock, config_entry_mock, 0)
+
+        await entity.async_set_native_value(3200.0)
+
+        coordinator_mock.async_set_power.assert_called_once_with(index=0, power=3200)

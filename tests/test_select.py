@@ -11,6 +11,7 @@ from custom_components.fronius_tdc.const import (
 )
 from custom_components.fronius_tdc.select import (
     FroniusBatterySelect,
+    FroniusScheduleTypeSelect,
     async_setup_entry,
 )
 
@@ -326,3 +327,90 @@ class TestAsyncSetupEntry:
         entities = async_add_entities.call_args[0][0]
         assert len(entities) == 1
         assert entities[0]._key == "HYB_EM_MODE"
+
+    @pytest.mark.asyncio
+    async def test_async_setup_entry_with_schedule_coordinator_only(self) -> None:
+        """Test setup entry creates schedule type selects without battery data."""
+        hass = MagicMock()
+        config_entry = MagicMock()
+        config_entry.entry_id = "test_entry"
+
+        tdc_coordinator = MagicMock()
+        tdc_coordinator.async_config_entry_first_refresh = AsyncMock()
+        tdc_coordinator.data = [
+            {"ScheduleType": "CHARGE_MAX"},
+            {"ScheduleType": "DISCHARGE_MIN"},
+        ]
+
+        hass.data = {DOMAIN: {config_entry.entry_id: tdc_coordinator}}
+        async_add_entities = MagicMock()
+
+        await async_setup_entry(hass, config_entry, async_add_entities)
+
+        tdc_coordinator.async_config_entry_first_refresh.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        assert len(entities) == 2
+        assert all(isinstance(e, FroniusScheduleTypeSelect) for e in entities)
+
+
+class TestFroniusScheduleTypeSelect:
+    """Test FroniusScheduleTypeSelect entity."""
+
+    @pytest.fixture
+    def coordinator_mock(self):
+        """Create a mock TOU coordinator."""
+        coordinator = MagicMock()
+        coordinator.data = [{"ScheduleType": "CHARGE_MAX"}]
+        return coordinator
+
+    @pytest.fixture
+    def config_entry_mock(self):
+        """Create a mock config entry."""
+        entry = MagicMock()
+        entry.entry_id = "test_entry_123"
+        entry.title = "Test Inverter"
+        return entry
+
+    def test_schedule_type_initialization(self, coordinator_mock, config_entry_mock):
+        """Test schedule type entity initialization."""
+        entity = FroniusScheduleTypeSelect(coordinator_mock, config_entry_mock, 0)
+
+        assert entity._attr_unique_id == "test_entry_123_schedule_0_schedule_type"
+        assert entity.entity_id == "select.test_inverter_schedule_0_schedule_type"
+        assert entity.name == "Schedule 1 Type"
+        assert entity.current_option == "Charge Max"
+
+    def test_schedule_type_out_of_range_returns_none(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test current_option returns None for missing schedule index."""
+        entity = FroniusScheduleTypeSelect(coordinator_mock, config_entry_mock, 5)
+
+        assert entity.current_option is None
+
+    @pytest.mark.asyncio
+    async def test_schedule_type_select_option(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test schedule type setter maps from label to API value."""
+        coordinator_mock.async_set_schedule_type = AsyncMock()
+        entity = FroniusScheduleTypeSelect(coordinator_mock, config_entry_mock, 0)
+
+        await entity.async_select_option("Discharge Min")
+
+        coordinator_mock.async_set_schedule_type.assert_called_once_with(
+            index=0,
+            schedule_type="DISCHARGE_MIN",
+        )
+
+    @pytest.mark.asyncio
+    async def test_schedule_type_unknown_option_is_ignored(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test unknown schedule type labels are not dispatched."""
+        coordinator_mock.async_set_schedule_type = AsyncMock()
+        entity = FroniusScheduleTypeSelect(coordinator_mock, config_entry_mock, 0)
+
+        await entity.async_select_option("Not A Real Type")
+
+        coordinator_mock.async_set_schedule_type.assert_not_called()

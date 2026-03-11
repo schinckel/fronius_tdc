@@ -16,6 +16,7 @@ from custom_components.fronius_tdc.switch import (
     FroniusScheduleEntity,
     FroniusScheduleFieldSwitch,
     FroniusScheduleSwitch,
+    FroniusScheduleWeekdaySwitch,
     async_setup_entry,
 )
 
@@ -62,6 +63,7 @@ class TestFroniusScheduleSwitch:
         assert entity._get_schedule_value(("Weekdays", "Mon")) is True
         assert entity._get_schedule_value(("Missing",)) is None
         assert entity._get_schedule_value(("Power", "Nested")) is None
+        assert entity._get_schedule_value(()) == coordinator_mock.data[0]
 
     @pytest.mark.asyncio
     async def test_descriptor_switch_dispatches_configured_setter(
@@ -241,10 +243,14 @@ class TestAsyncSetupEntry:
 
         # Check that entities were created for each schedule
         entities = async_add_entities.call_args[0][0]
-        assert len(entities) == 2
-        assert all(isinstance(e, FroniusScheduleSwitch) for e in entities)
-        assert entities[0]._index == 0
-        assert entities[1]._index == 1
+        active_switches = [e for e in entities if isinstance(e, FroniusScheduleSwitch)]
+        weekday_switches = [
+            e for e in entities if isinstance(e, FroniusScheduleWeekdaySwitch)
+        ]
+        assert len(active_switches) == 2
+        assert len(weekday_switches) == 14
+        assert active_switches[0]._index == 0
+        assert active_switches[1]._index == 1
 
     @pytest.mark.asyncio
     async def test_async_setup_entry_with_battery_coordinator(self) -> None:
@@ -531,6 +537,27 @@ class TestSwitchEdgeCases:
         await switch.async_turn_off(some_kwarg="value")
 
         coordinator_mock.async_set_active.assert_called_once_with(index=0, active=False)
+
+    @pytest.mark.asyncio
+    async def test_weekday_switch_turn_on(
+        self, coordinator_mock, config_entry_mock
+    ) -> None:
+        """Test weekday switch dispatches to async_set_weekday."""
+        coordinator_mock.async_set_weekday = AsyncMock()
+        weekday_switch = FroniusScheduleWeekdaySwitch(
+            coordinator_mock,
+            config_entry_mock,
+            0,
+            SCHEDULE_WEEKDAY_SWITCH_DESCRIPTIONS[0],
+        )
+
+        await weekday_switch.async_turn_on()
+
+        coordinator_mock.async_set_weekday.assert_called_once_with(
+            0,
+            "Mon",
+            enabled=True,
+        )
 
     def test_switch_device_info_consistent(
         self, coordinator_mock, config_entry_mock
