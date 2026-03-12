@@ -61,7 +61,7 @@ add_schedule:
       selector:
         number:
           min: 0
-          max: 2000000000
+          max: 200000
           step: 1
           mode: box
 
