@@ -32,14 +32,14 @@ jobs:
           pytest --junitxml=junit.xml -o junit_family=legacy --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing --cov-branch
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: coverage
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           report_type: test_results
