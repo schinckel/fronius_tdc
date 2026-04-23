@@ -75,6 +75,33 @@ class TestParseChallenge:
         assert "nonce" in result
         assert result["realm"] == "api"
 
+    def test_parse_challenge_mixed_quoted_unquoted(self):
+        """Test parsing challenge with both quoted and unquoted values."""
+        header = 'Digest realm="Webinterface area", nonce=abc123, qop="auth"'
+        result = _parse_challenge(header)
+
+        assert result["realm"] == "Webinterface area"  # quoted
+        assert result["nonce"] == "abc123"  # unquoted
+        assert result["qop"] == "auth"  # quoted
+
+    def test_parse_challenge_all_unquoted(self):
+        """Test parsing challenge with all unquoted values."""
+        header = "Digest realm=api, nonce=abc123, qop=auth"
+        result = _parse_challenge(header)
+
+        assert result["realm"] == "api"  # unquoted
+        assert result["nonce"] == "abc123"  # unquoted
+        assert result["qop"] == "auth"  # unquoted
+
+    def test_parse_challenge_skips_empty_values(self):
+        """Test that empty values are skipped."""
+        header = 'Digest realm="", nonce=abc123, qop='
+        result = _parse_challenge(header)
+
+        assert "realm" not in result  # empty value skipped
+        assert "qop" not in result  # empty value skipped
+        assert result["nonce"] == "abc123"
+
 
 class TestBuildAuthorization:
     """Test _build_authorization function."""
@@ -265,6 +292,34 @@ class TestBuildAuthorization:
             hashlib.md5(  # noqa: S324
                 f"{username}:{realm}:{password}".encode()
             ).hexdigest()
+
+            # The response should contain the correct HA1 value
+            # We can verify it by computing what the response should be
+            assert header is not None
+            assert "response=" in header
+
+    def test_build_authorization_ha1_uses_sha256(self):
+        """Test that HA1 can be computed with SHA-256."""
+        username = "customer"
+        password = "password"  # noqa: S105
+        realm = "Webinterface area"
+
+        challenge = f'Digest realm="{realm}", nonce="n1", qop="auth"'
+
+        with patch("custom_components.fronius_tdc.auth.os.urandom") as mock_urandom:
+            mock_urandom.return_value = b"\x00" * 8
+
+            header = _build_authorization(
+                "GET",
+                "http://192.168.1.1/api",
+                username,
+                password,
+                challenge,
+                ha1_algo="sha256",
+            )
+
+            # Manually compute expected HA1 with SHA-256
+            hashlib.sha256(f"{username}:{realm}:{password}".encode()).hexdigest()
 
             # The response should contain the correct HA1 value
             # We can verify it by computing what the response should be

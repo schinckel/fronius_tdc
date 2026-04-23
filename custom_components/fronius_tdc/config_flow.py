@@ -86,13 +86,11 @@ def _test_connection_blocking(
 
 def _build_schema(defaults: dict) -> vol.Schema:
     """Build the config flow form schema, using defaults where available."""
-    return vol.Schema(
-        {
-            vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
-            vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
-            vol.Required(
-                CONF_USERNAME, default=defaults.get(CONF_USERNAME, "customer")
-            ): str,
-            vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")): str,
-        }
-    )
+    return vol.Schema({
+        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
+        vol.Required(
+            CONF_USERNAME, default=defaults.get(CONF_USERNAME, "customer")
+        ): str,
+        vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")): str,
+    })

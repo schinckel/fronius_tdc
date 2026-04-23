@@ -40,12 +40,10 @@ async def async_setup_entry(
 
     if tdc_coordinator:
         await tdc_coordinator.async_config_entry_first_refresh()
-        entities.extend(
-            [
-                FroniusScheduleSwitch(tdc_coordinator, entry, index)
-                for index in range(len(tdc_coordinator.data or []))
-            ]
-        )
+        entities.extend([
+            FroniusScheduleSwitch(tdc_coordinator, entry, index)
+            for index in range(len(tdc_coordinator.data or []))
+        ])
 
     # Set up Battery configuration switches (booleans only)
     batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(
