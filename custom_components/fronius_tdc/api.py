@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -10,6 +11,13 @@ from .auth import _build_authorization
 from .const import LOGGER
 
 UNAUTHORIZED = 401
+_AUTH_ALGO_CACHE: dict[tuple[str, str], str] = {}
+HA1_ALGOS = ("sha256", "md5")
+
+
+def _auth_cache_key(url: str, username: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    return parsed.netloc, username
 
 
 def fronius_request(
@@ -48,25 +56,55 @@ def fronius_request(
     if not challenge_header:
         resp.raise_for_status()
 
-    # Step 3: compute Authorization
-    authorization = _build_authorization(
-        method,
-        url,
-        username,
-        password,
-        challenge_header,
+    base_kwargs = dict(kwargs)
+    auth_headers = dict(base_kwargs.pop("headers", None) or {})
+    cache_key = _auth_cache_key(url, username)
+    cached_ha1_algo = _AUTH_ALGO_CACHE.get(cache_key)
+    algos = (
+        (cached_ha1_algo, *tuple(a for a in HA1_ALGOS if a != cached_ha1_algo))
+        if cached_ha1_algo
+        else HA1_ALGOS
     )
 
-    # Step 4: retry with Authorization header
-    headers = dict(kwargs.pop("headers", None) or {})
-    headers["Authorization"] = authorization
-    resp = requests.request(method, url, headers=headers, timeout=timeout, **kwargs)
-    LOGGER.debug(
-        "Step 2 (authenticated) — %s %s → HTTP %s", method, url, resp.status_code
-    )
-    LOGGER.debug("Step 2 response body: %s", resp.text[:800])
+    for attempt, ha1_algo in enumerate(algos, start=1):
+        authorization = _build_authorization(
+            method,
+            url,
+            username,
+            password,
+            challenge_header,
+            ha1_algo=ha1_algo,
+        )
+
+        headers = dict(auth_headers)
+        headers["Authorization"] = authorization
+        resp = requests.request(
+            method, url, headers=headers, timeout=timeout, **base_kwargs
+        )
+        LOGGER.debug(
+            "Step %d (authenticated, HA1=%s) — %s %s → HTTP %s",
+            attempt,
+            ha1_algo,
+            method,
+            url,
+            resp.status_code,
+        )
+
+        if resp.status_code != UNAUTHORIZED:
+            _AUTH_ALGO_CACHE[cache_key] = ha1_algo
+            resp.raise_for_status()
+            return resp
+
+        challenge_header = (
+            resp.headers.get("www-authenticate")
+            or resp.headers.get("x-www-authenticate")
+            or challenge_header
+        )
+
     resp.raise_for_status()
-    return resp
+    # This next line will never be reached because the above line will raise,
+    # but the linting tools don't know that, and will complain about missing return.
+    return resp  # pragma: no cover
 
 
 def fronius_get_json(url: str, username: str, password: str, timeout: int = 15) -> dict:

@@ -26,3 +26,6 @@ keep-runtime-typing = true
 
 [lint.mccabe]
 max-complexity = 25
+
+[format]
+preview = true
