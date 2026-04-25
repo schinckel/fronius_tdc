@@ -26,9 +26,10 @@ To create a new release:
 
 1. Update the version in `custom_components/fronius_tdc/manifest.json` to match the new version.
 2. Add a new entry to `CHANGES.md` in the format `## X.Y.Z - YYYY-MM-DD` with the changelog content below it.
-3. Commit these changes to the `main` branch with a commit message in the format `Release: vX.Y.Z` (e.g., `Release: v1.2.1`).
+3. Commit these changes to the `main` branch.
+4. Create and push a tag in the format `vX.Y.Z` (e.g., `git tag v1.2.1 && git push origin v1.2.1`).
 
-The release workflow will automatically create a GitHub Release using the changelog entry for that version and tag the commit with `vX.Y.Z`.
+The release workflow will automatically create a GitHub Release using the changelog entry for that version.
 
 For manual releases or testing the workflow, use the `workflow_dispatch` trigger in the GitHub Actions tab, providing the version number.
 ## Any contributions you make will be under the MIT Software License
