@@ -6,9 +6,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import requests
+import voluptuous as vol
 
 from custom_components.fronius_tdc.config_flow import (
     BlueprintFlowHandler,
+    _build_schema,
+    _normalize_host,
     _test_connection_blocking,
 )
 from custom_components.fronius_tdc.const import (
@@ -96,6 +99,55 @@ class TestTestConnectionBlocking:
         assert result == "cannot_connect"
 
 
+class TestHostValidation:
+    """Test host normalization and validation helpers."""
+
+    @pytest.mark.parametrize(
+        ("host", "expected"),
+        [
+            ("Example.LOCAL", "example.local"),
+            (" 192.168.1.10 ", "192.168.1.10"),
+        ],
+    )
+    def test_normalize_host(self, host: str, expected: str) -> None:
+        """Test host values are normalized."""
+        assert _normalize_host(host) == expected
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "",
+            " ",
+            "http://192.168.1.1",
+            "example.local/path",
+            "bad host",
+            "user@example.local",
+            "2001:db8::1",
+        ],
+    )
+    def test_normalize_host_rejects_invalid_values(self, host: str) -> None:
+        """Test malformed host values are rejected."""
+        with pytest.raises(vol.Invalid):
+            _normalize_host(host)
+
+    def test_build_schema_validates_port_range(self) -> None:
+        """Test ports outside the valid TCP range are rejected."""
+        schema = _build_schema({})
+
+        with pytest.raises(vol.Invalid):
+            schema({
+                CONF_HOST: "192.168.1.1",
+                CONF_PORT: 70000,
+                CONF_USERNAME: "customer",
+                CONF_PASSWORD: "password",
+            })
+
+    def test_normalize_host_rejects_invalid_hostname_label(self) -> None:
+        """Test dotted hostnames with invalid labels are rejected."""
+        with pytest.raises(vol.Invalid, match="Enter a valid hostname or IPv4 address"):
+            _normalize_host("bad_host.local")
+
+
 class TestBlueprintFlowHandler:
     """Test BlueprintFlowHandler config flow."""
 
@@ -114,7 +166,7 @@ class TestBlueprintFlowHandler:
         flow_handler.async_create_entry = Mock()
 
         user_input = {
-            CONF_HOST: "192.168.1.1",
+            CONF_HOST: " Example.LOCAL ",
             CONF_PORT: 80,
             CONF_USERNAME: "customer",
             CONF_PASSWORD: "password",
@@ -125,8 +177,18 @@ class TestBlueprintFlowHandler:
 
         await flow_handler.async_step_user(user_input)
 
-        flow_handler.async_set_unique_id.assert_called_once_with("fronius_tdc_192.168.1.1")
+        flow_handler.hass.async_add_executor_job.assert_called_once_with(
+            mock_test,
+            "example.local",
+            80,
+            "customer",
+            "password",
+        )
+        flow_handler.async_set_unique_id.assert_called_once_with("fronius_tdc_example.local")
         flow_handler.async_create_entry.assert_called_once()
+        create_entry_kwargs = flow_handler.async_create_entry.call_args.kwargs
+        assert create_entry_kwargs["title"] == "Fronius Gen24 (example.local)"
+        assert create_entry_kwargs["data"][CONF_HOST] == "example.local"
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.config_flow._test_connection_blocking")
