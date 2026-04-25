@@ -382,9 +382,7 @@ class TestAuthIntegration:
     def test_auth_roundtrip(self, mock_urandom):
         """Test complete authentication challenge-response flow."""
         # Simulate a real Fronius challenge
-        challenge = (
-            'Digest realm="Webinterface area", nonce="6edf5f3f0b0c7d4b", qop="auth"'
-        )
+        challenge = 'Digest realm="Webinterface area", nonce="6edf5f3f0b0c7d4b", qop="auth"'
 
         mock_urandom.return_value = b"\xaa\xbb\xcc\xdd\xee\xff\x00\x11"
 

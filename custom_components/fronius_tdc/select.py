@@ -30,9 +30,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up select entities for battery configuration."""
-    coordinator: FroniusBatteriesCoordinator = (
-        hass.data[DOMAIN].get("batteries_coordinator", {}).get(entry.entry_id)
-    )
+    coordinator: FroniusBatteriesCoordinator = hass.data[DOMAIN].get("batteries_coordinator", {}).get(entry.entry_id)
 
     if not coordinator:
         _LOGGER.warning(
@@ -45,11 +43,7 @@ async def async_setup_entry(
     _LOGGER.debug("Battery coordinator data available: %s", coordinator.data)
 
     # Find all select/enum keys for select entities
-    select_keys = [
-        key
-        for key, platform_type in BATTERY_CONFIG_KEYS.items()
-        if platform_type == "select"
-    ]
+    select_keys = [key for key, platform_type in BATTERY_CONFIG_KEYS.items() if platform_type == "select"]
 
     select_entities = [
         FroniusBatterySelect(coordinator, entry, key)
@@ -64,9 +58,7 @@ async def async_setup_entry(
     async_add_entities(select_entities)
 
 
-class FroniusBatterySelect(
-    CoordinatorEntity[FroniusBatteriesCoordinator], SelectEntity
-):
+class FroniusBatterySelect(CoordinatorEntity[FroniusBatteriesCoordinator], SelectEntity):
     """Select entity for an enum battery configuration setting."""
 
     def __init__(
@@ -94,9 +86,7 @@ class FroniusBatterySelect(
             # Extract the display labels as options
             self._attr_options = [str(label) for label in options_dict.values()]
             # Build reverse mapping for converting display label back to value
-            self._label_to_value = {
-                str(label): value for value, label in options_dict.items()
-            }
+            self._label_to_value = {str(label): value for value, label in options_dict.items()}
 
     @property
     def name(self) -> str:
@@ -119,9 +109,7 @@ class FroniusBatterySelect(
             return str(self._options_dict[current_value])
 
         # If value not in mapping, return None or log warning
-        _LOGGER.warning(
-            "Battery select %s has unknown value: %s", self._key, current_value
-        )
+        _LOGGER.warning("Battery select %s has unknown value: %s", self._key, current_value)
         return None
 
     async def async_select_option(self, option: str) -> None:

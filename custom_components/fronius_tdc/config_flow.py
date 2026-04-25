@@ -57,9 +57,7 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-def _test_connection_blocking(
-    host: str, port: int, username: str, password: str
-) -> str | None:
+def _test_connection_blocking(host: str, port: int, username: str, password: str) -> str | None:
     """Test connection to the inverter with the given parameters."""
     url = f"http://{host}:{port}{ENDPOINT_TOU}"
     LOGGER.debug("Testing connection to %s", url)
@@ -67,11 +65,7 @@ def _test_connection_blocking(
         fronius_get_json(url, username, password, timeout=10)
     except requests.HTTPError as exc:
         LOGGER.warning("Fronius TDC connection test HTTP error: %s", exc)
-        return (
-            "invalid_auth"
-            if exc.response.status_code in (401, 403)
-            else "cannot_connect"
-        )
+        return "invalid_auth" if exc.response.status_code in (401, 403) else "cannot_connect"
     except requests.ConnectionError as exc:
         LOGGER.warning("Fronius TDC connection test ConnectionError: %s", exc)
         return "cannot_connect"
@@ -89,8 +83,6 @@ def _build_schema(defaults: dict) -> vol.Schema:
     return vol.Schema({
         vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
         vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)): int,
-        vol.Required(
-            CONF_USERNAME, default=defaults.get(CONF_USERNAME, "customer")
-        ): str,
+        vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "customer")): str,
         vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")): str,
     })

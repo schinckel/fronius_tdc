@@ -41,26 +41,17 @@ async def async_setup_entry(
     if tdc_coordinator:
         await tdc_coordinator.async_config_entry_first_refresh()
         entities.extend([
-            FroniusScheduleSwitch(tdc_coordinator, entry, index)
-            for index in range(len(tdc_coordinator.data or []))
+            FroniusScheduleSwitch(tdc_coordinator, entry, index) for index in range(len(tdc_coordinator.data or []))
         ])
 
     # Set up Battery configuration switches (booleans only)
-    batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(
-        entry.entry_id
-    )
+    batteries_coordinator = domain_data.get("batteries_coordinator", {}).get(entry.entry_id)
     if batteries_coordinator:
         await batteries_coordinator.async_config_entry_first_refresh()
-        _LOGGER.debug(
-            "Battery coordinator data available: %s", batteries_coordinator.data
-        )
+        _LOGGER.debug("Battery coordinator data available: %s", batteries_coordinator.data)
 
         # Find all boolean keys for switches
-        boolean_keys = [
-            key
-            for key, platform_type in BATTERY_CONFIG_KEYS.items()
-            if platform_type == "switch"
-        ]
+        boolean_keys = [key for key, platform_type in BATTERY_CONFIG_KEYS.items() if platform_type == "switch"]
         battery_switches = [
             FroniusBatterySwitch(batteries_coordinator, entry, key)
             for key in boolean_keys
@@ -179,9 +170,7 @@ class FroniusScheduleSwitch(CoordinatorEntity[FroniusTDCCoordinator], SwitchEnti
         await self.coordinator.async_set_active(index=self._index, active=False)
 
 
-class FroniusBatterySwitch(
-    CoordinatorEntity[FroniusBatteriesCoordinator], SwitchEntity
-):
+class FroniusBatterySwitch(CoordinatorEntity[FroniusBatteriesCoordinator], SwitchEntity):
     """Switch for a boolean battery configuration setting."""
 
     def __init__(

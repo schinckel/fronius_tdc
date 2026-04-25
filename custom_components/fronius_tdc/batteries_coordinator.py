@@ -56,9 +56,7 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
         }
     """
 
-    def __init__(
-        self, hass: HomeAssistant, logger: logging.Logger, config_entry: Any
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, logger: logging.Logger, config_entry: Any) -> None:
         """Initialize the coordinator and parse connection parameters."""
         super().__init__(
             hass,
@@ -83,9 +81,7 @@ class FroniusBatteriesCoordinator(DataUpdateCoordinator[dict]):
     def _blocking_get(self) -> dict:
         """Get the current battery configuration."""
         try:
-            raw = fronius_get_json(
-                self._url, self._username, self._password, REQUEST_TIMEOUT
-            )
+            raw = fronius_get_json(self._url, self._username, self._password, REQUEST_TIMEOUT)
             # The endpoint returns the config object directly, not wrapped
             config = _strip_meta(raw)
             _LOGGER.debug("Battery config fetched: %s", config)

@@ -31,7 +31,6 @@ addopts = [
     "--cov-report=xml",
     "--cov-report=html",
     "--cov-report=term-missing",
-    "--cov-report=annotate",
     "--cov-report=term",
     "--cov-branch",
     "--junitxml=junit.xml",
@@ -46,6 +45,7 @@ filterwarnings = [
 
 [tool.ruff]
 target-version = "py314"
+line-length = 118
 
 [tool.ruff.lint]
 select = ["ALL"]

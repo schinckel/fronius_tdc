@@ -50,9 +50,7 @@ class TestFroniusScheduleSwitch:
         expected_name = "Discharge Min 5400W 18:00-21:00"
         assert switch.name == expected_name
 
-    def test_switch_name_with_missing_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_name_with_missing_data(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch name with incomplete schedule data."""
         coordinator_mock.data = [{}]
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
@@ -115,9 +113,7 @@ class TestFroniusScheduleSwitch:
         assert "Sat" in attrs["days"]
         assert len(attrs["days"]) == 7
 
-    def test_extra_state_attributes_with_missing_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_extra_state_attributes_with_missing_data(self, coordinator_mock, config_entry_mock) -> None:
         """Test extra state attributes with incomplete data."""
         coordinator_mock.data = [
             {
@@ -147,9 +143,7 @@ class TestFroniusScheduleSwitch:
 
         await switch.async_turn_off()
 
-        switch.coordinator.async_set_active.assert_called_once_with(
-            index=0, active=False
-        )
+        switch.coordinator.async_set_active.assert_called_once_with(index=0, active=False)
 
 
 class TestAsyncSetupEntry:
@@ -331,9 +325,7 @@ class TestSwitchEdgeCases:
         entry.entry_id = "test_entry_123"
         return entry
 
-    def test_switch_with_empty_weekdays(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_with_empty_weekdays(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch with no active weekdays."""
         coordinator_mock.data = [
             {
@@ -357,9 +349,7 @@ class TestSwitchEdgeCases:
 
         assert attrs["days"] == []
 
-    def test_switch_with_all_weekdays_active(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_with_all_weekdays_active(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch with all weekdays active."""
         coordinator_mock.data = [
             {
@@ -397,9 +387,7 @@ class TestSwitchEdgeCases:
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
         assert switch.name == "Charge Max 0W 00:00-00:00"
 
-    def test_switch_name_with_special_characters_in_time(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_name_with_special_characters_in_time(self, coordinator_mock, config_entry_mock) -> None:
         """Test that switch name handles times correctly."""
         coordinator_mock.data = [
             {
@@ -412,29 +400,21 @@ class TestSwitchEdgeCases:
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
         assert switch.name == "Charge Min 500W 09:30-17:45"
 
-    def test_switch_coordinator_data_changes(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_coordinator_data_changes(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch behavior when coordinator data changes."""
-        coordinator_mock.data = [
-            {"Active": True, "ScheduleType": "CHARGE_MAX", "Power": 3000}
-        ]
+        coordinator_mock.data = [{"Active": True, "ScheduleType": "CHARGE_MAX", "Power": 3000}]
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
 
         initial_is_on = switch.is_on
         assert initial_is_on is True
 
         # Simulate coordinator data update
-        coordinator_mock.data = [
-            {"Active": False, "ScheduleType": "CHARGE_MAX", "Power": 3000}
-        ]
+        coordinator_mock.data = [{"Active": False, "ScheduleType": "CHARGE_MAX", "Power": 3000}]
 
         updated_is_on = switch.is_on
         assert updated_is_on is False
 
-    def test_switch_with_missing_schedule_type(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_with_missing_schedule_type(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch with missing schedule type."""
         coordinator_mock.data = [
             {
@@ -448,9 +428,7 @@ class TestSwitchEdgeCases:
         assert switch.name == " 3000W 22:00-06:00"
 
     @pytest.mark.asyncio
-    async def test_switch_turn_on_with_kwargs(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    async def test_switch_turn_on_with_kwargs(self, coordinator_mock, config_entry_mock) -> None:
         """Test turn_on with extra kwargs (should be ignored)."""
         coordinator_mock.async_set_active = AsyncMock()
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
@@ -460,9 +438,7 @@ class TestSwitchEdgeCases:
         coordinator_mock.async_set_active.assert_called_once_with(0, active=True)
 
     @pytest.mark.asyncio
-    async def test_switch_turn_off_with_kwargs(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    async def test_switch_turn_off_with_kwargs(self, coordinator_mock, config_entry_mock) -> None:
         """Test turn_off with extra kwargs (should be ignored)."""
         coordinator_mock.async_set_active = AsyncMock()
         switch = FroniusScheduleSwitch(coordinator_mock, config_entry_mock, 0)
@@ -471,9 +447,7 @@ class TestSwitchEdgeCases:
 
         coordinator_mock.async_set_active.assert_called_once_with(index=0, active=False)
 
-    def test_switch_device_info_consistent(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_device_info_consistent(self, coordinator_mock, config_entry_mock) -> None:
         """Test that device info is consistent across switches."""
         coordinator_mock.data = [
             {"Active": True, "ScheduleType": "CHARGE_MAX"},
@@ -487,9 +461,7 @@ class TestSwitchEdgeCases:
         assert switch1._attr_device_info == switch2._attr_device_info
         assert switch1._attr_device_info["identifiers"] == {(DOMAIN, "test_entry_123")}  # type: ignore  # noqa: PGH003
 
-    def test_schedule_out_of_range_index(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_schedule_out_of_range_index(self, coordinator_mock, config_entry_mock) -> None:
         """Test switch behavior when index is out of range."""
         coordinator_mock.data = [{"Active": True, "ScheduleType": "CHARGE_MAX"}]
         # Create switch with index 5 but only 1 schedule exists
@@ -502,14 +474,9 @@ class TestSwitchEdgeCases:
         # is_on should return False with missing data
         assert switch.is_on is False
 
-    def test_switch_unique_id_varies_by_index(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_switch_unique_id_varies_by_index(self, coordinator_mock, config_entry_mock) -> None:
         """Test that unique IDs are different for each switch."""
-        switches = [
-            FroniusScheduleSwitch(coordinator_mock, config_entry_mock, i)
-            for i in range(3)
-        ]
+        switches = [FroniusScheduleSwitch(coordinator_mock, config_entry_mock, i) for i in range(3)]
 
         unique_ids = [switch._attr_unique_id for switch in switches]
         assert len(set(unique_ids)) == 3  # All unique
@@ -541,17 +508,12 @@ class TestFroniusBatterySwitch:
     @pytest.fixture
     def battery_switch(self, battery_coordinator_mock, config_entry_mock):
         """Create a battery switch entity."""
-        return FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
-        )
+        return FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID")
 
     def test_battery_switch_initialization(self, battery_switch) -> None:
         """Test battery switch initialization."""
         assert battery_switch._key == "HYB_EVU_CHARGEFROMGRID"
-        assert (
-            battery_switch._attr_unique_id
-            == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
-        )
+        assert battery_switch._attr_unique_id == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
         assert battery_switch._attr_device_info["manufacturer"] == "Fronius"
         assert battery_switch._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
 
@@ -559,45 +521,29 @@ class TestFroniusBatterySwitch:
         """Test battery switch name from labels."""
         assert battery_switch.name == "Charge From Grid"
 
-    def test_battery_switch_name_fallback(
-        self, battery_coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_battery_switch_name_fallback(self, battery_coordinator_mock, config_entry_mock) -> None:
         """Test battery switch name falls back to title case."""
-        switch = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "UNKNOWN_KEY"
-        )
+        switch = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "UNKNOWN_KEY")
         assert switch.name == "Unknown Key"
 
     def test_battery_switch_is_on_true(self, battery_switch) -> None:
         """Test is_on property when True."""
         assert battery_switch.is_on is True
 
-    def test_battery_switch_is_on_false(
-        self, battery_coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_battery_switch_is_on_false(self, battery_coordinator_mock, config_entry_mock) -> None:
         """Test is_on property when False."""
-        switch = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC"
-        )
+        switch = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC")
         assert switch.is_on is False
 
-    def test_battery_switch_is_on_missing_key(
-        self, battery_coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_battery_switch_is_on_missing_key(self, battery_coordinator_mock, config_entry_mock) -> None:
         """Test is_on returns False when key is missing."""
-        switch = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "MISSING_KEY"
-        )
+        switch = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "MISSING_KEY")
         assert switch.is_on is False
 
-    def test_battery_switch_is_on_none_data(
-        self, battery_coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_battery_switch_is_on_none_data(self, battery_coordinator_mock, config_entry_mock) -> None:
         """Test is_on returns False when coordinator data is None."""
         battery_coordinator_mock.data = None
-        switch = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
-        )
+        switch = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID")
         assert switch.is_on is False
 
     @pytest.mark.asyncio
@@ -607,9 +553,7 @@ class TestFroniusBatterySwitch:
 
         await battery_switch.async_turn_on()
 
-        battery_switch.coordinator.async_set_switch.assert_called_once_with(
-            "HYB_EVU_CHARGEFROMGRID", value=True
-        )
+        battery_switch.coordinator.async_set_switch.assert_called_once_with("HYB_EVU_CHARGEFROMGRID", value=True)
 
     @pytest.mark.asyncio
     async def test_battery_switch_async_turn_off(self, battery_switch) -> None:
@@ -618,23 +562,13 @@ class TestFroniusBatterySwitch:
 
         await battery_switch.async_turn_off()
 
-        battery_switch.coordinator.async_set_switch.assert_called_once_with(
-            "HYB_EVU_CHARGEFROMGRID", value=False
-        )
+        battery_switch.coordinator.async_set_switch.assert_called_once_with("HYB_EVU_CHARGEFROMGRID", value=False)
 
-    def test_battery_switch_unique_id_per_key(
-        self, battery_coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_battery_switch_unique_id_per_key(self, battery_coordinator_mock, config_entry_mock) -> None:
         """Test that unique IDs are different for each battery switch key."""
-        switch1 = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID"
-        )
-        switch2 = FroniusBatterySwitch(
-            battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC"
-        )
+        switch1 = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "HYB_EVU_CHARGEFROMGRID")
+        switch2 = FroniusBatterySwitch(battery_coordinator_mock, config_entry_mock, "HYB_BM_CHARGEFROMAC")
 
         assert switch1._attr_unique_id != switch2._attr_unique_id
-        assert (
-            switch1._attr_unique_id == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
-        )
+        assert switch1._attr_unique_id == "test_entry_123_battery_HYB_EVU_CHARGEFROMGRID"
         assert switch2._attr_unique_id == "test_entry_123_battery_HYB_BM_CHARGEFROMAC"

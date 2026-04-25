@@ -48,16 +48,12 @@ class TestFroniusBatteryNumber:
     @pytest.fixture
     def soc_number(self, coordinator_mock, config_entry_mock):
         """Create an SOC (percentage) number entity."""
-        return FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "BAT_M0_SOC_MAX"
-        )
+        return FroniusBatteryNumber(coordinator_mock, config_entry_mock, "BAT_M0_SOC_MAX")
 
     def test_number_initialization_power(self, power_number) -> None:
         """Test number entity initialization for power."""
         assert power_number._key == "HYB_EM_POWER"
-        assert (
-            power_number._attr_unique_id == "test_entry_123_battery_number_HYB_EM_POWER"
-        )
+        assert power_number._attr_unique_id == "test_entry_123_battery_number_HYB_EM_POWER"
         assert power_number._attr_device_info["manufacturer"] == "Fronius"
         assert power_number._attr_device_info["model"] == "GEN24 Plus / Symo GEN24"
         assert power_number._attr_native_min_value == -200000
@@ -79,64 +75,42 @@ class TestFroniusBatteryNumber:
         """Test name property for percentage entity."""
         assert soc_number.name == "Battery Max SOC"
 
-    def test_name_property_with_fallback(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_name_property_with_fallback(self, coordinator_mock, config_entry_mock) -> None:
         """Test name property falls back to title-cased key."""
         # Use a key that's not in BATTERY_CONFIG_LABELS
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "UNKNOWN_KEY"
-        )
+        number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, "UNKNOWN_KEY")
         assert number.name == "Unknown Key"
 
     def test_native_value_property(self, power_number) -> None:
         """Test native_value property returns current value."""
         assert power_number.native_value == 5000.0
 
-    def test_native_value_property_with_missing_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_native_value_property_with_missing_data(self, coordinator_mock, config_entry_mock) -> None:
         """Test native_value returns None when key is missing."""
         coordinator_mock.data = {}
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
+        number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, "HYB_EM_POWER")
         assert number.native_value is None
 
-    def test_native_value_property_with_none_coordinator_data(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_native_value_property_with_none_coordinator_data(self, coordinator_mock, config_entry_mock) -> None:
         """Test native_value returns None when coordinator data is None."""
         coordinator_mock.data = None
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
+        number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, "HYB_EM_POWER")
         assert number.native_value is None
 
-    def test_native_value_converts_to_float(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_native_value_converts_to_float(self, coordinator_mock, config_entry_mock) -> None:
         """Test native_value converts integer values to float."""
         coordinator_mock.data = {"HYB_EM_POWER": 3000}
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
+        number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, "HYB_EM_POWER")
         assert number.native_value == 3000.0
         assert isinstance(number.native_value, float)
 
-    def test_unit_of_measurement_for_all_percentage_keys(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_unit_of_measurement_for_all_percentage_keys(self, coordinator_mock, config_entry_mock) -> None:
         """Test that all percentage keys have PERCENTAGE unit."""
         for key in PERCENTAGE_KEYS:
             number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, key)
-            assert number._attr_native_unit_of_measurement == PERCENTAGE, (
-                f"{key} should have PERCENTAGE unit"
-            )
+            assert number._attr_native_unit_of_measurement == PERCENTAGE, f"{key} should have PERCENTAGE unit"
 
-    def test_min_max_values_for_all_keys(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    def test_min_max_values_for_all_keys(self, coordinator_mock, config_entry_mock) -> None:
         """Test that all keys in NUMBER_MIN_MAX have proper min/max values."""
         for key in NUMBER_MIN_MAX:
             number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, key)
@@ -151,25 +125,17 @@ class TestFroniusBatteryNumber:
 
         await power_number.async_set_native_value(6000.0)
 
-        power_number.coordinator.async_set_number.assert_called_once_with(
-            "HYB_EM_POWER", 6000
-        )
+        power_number.coordinator.async_set_number.assert_called_once_with("HYB_EM_POWER", 6000)
 
     @pytest.mark.asyncio
-    async def test_async_set_native_value_float(
-        self, coordinator_mock, config_entry_mock
-    ) -> None:
+    async def test_async_set_native_value_float(self, coordinator_mock, config_entry_mock) -> None:
         """Test setting a float value (non-integer)."""
-        number = FroniusBatteryNumber(
-            coordinator_mock, config_entry_mock, "HYB_EM_POWER"
-        )
+        number = FroniusBatteryNumber(coordinator_mock, config_entry_mock, "HYB_EM_POWER")
         number.coordinator.async_set_number = AsyncMock()
 
         await number.async_set_native_value(5500.5)
 
-        number.coordinator.async_set_number.assert_called_once_with(
-            "HYB_EM_POWER", 5500.5
-        )
+        number.coordinator.async_set_number.assert_called_once_with("HYB_EM_POWER", 5500.5)
 
     @pytest.mark.asyncio
     async def test_async_set_native_value_percentage(self, soc_number) -> None:
@@ -178,9 +144,7 @@ class TestFroniusBatteryNumber:
 
         await soc_number.async_set_native_value(95.0)
 
-        soc_number.coordinator.async_set_number.assert_called_once_with(
-            "BAT_M0_SOC_MAX", 95
-        )
+        soc_number.coordinator.async_set_number.assert_called_once_with("BAT_M0_SOC_MAX", 95)
 
 
 class TestAsyncSetupEntry:
@@ -204,9 +168,7 @@ class TestAsyncSetupEntry:
             "BAT_M0_SOC_MIN": 0,
         }
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
+        hass.data = {DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}}
         async_add_entities = MagicMock()
 
         await async_setup_entry(hass, config_entry, async_add_entities)
@@ -244,9 +206,7 @@ class TestAsyncSetupEntry:
         coordinator.async_config_entry_first_refresh = AsyncMock()
         coordinator.data = {}
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
+        hass.data = {DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}}
         async_add_entities = MagicMock()
 
         await async_setup_entry(hass, config_entry, async_add_entities)
@@ -270,9 +230,7 @@ class TestAsyncSetupEntry:
             "BAT_M0_SOC_MAX": 100,
         }
 
-        hass.data = {
-            DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}
-        }
+        hass.data = {DOMAIN: {"batteries_coordinator": {config_entry.entry_id: coordinator}}}
         async_add_entities = MagicMock()
 
         await async_setup_entry(hass, config_entry, async_add_entities)

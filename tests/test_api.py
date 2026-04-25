@@ -73,16 +73,12 @@ class TestFroniusRequest:
         """Test that SHA-256 HA1 is attempted first and MD5 is used on failure."""
         response_401 = Mock()
         response_401.status_code = 401
-        response_401.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="abc123"'
-        }
+        response_401.headers = {"x-www-authenticate": 'Digest realm="test", nonce="abc123"'}
         response_401.raise_for_status = Mock()
 
         response_401_second = Mock()
         response_401_second.status_code = 401
-        response_401_second.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="xyz789"'
-        }
+        response_401_second.headers = {"x-www-authenticate": 'Digest realm="test", nonce="xyz789"'}
         response_401_second.raise_for_status = Mock()
 
         response_200 = Mock()
@@ -110,25 +106,19 @@ class TestFroniusRequest:
 
     @patch("custom_components.fronius_tdc.api.requests.request")
     @patch("custom_components.fronius_tdc.api._build_authorization")
-    def test_cached_algorithm_avoids_repeated_probe(
-        self, mock_auth, mock_request
-    ) -> None:
+    def test_cached_algorithm_avoids_repeated_probe(self, mock_auth, mock_request) -> None:
         """Test that a cached HA1 algorithm is tried first and falls back on failure."""
         cache_key = ("192.168.1.1:80", "customer")
         api._AUTH_ALGO_CACHE[cache_key] = "sha256"
 
         response_401_initial = Mock()
         response_401_initial.status_code = 401
-        response_401_initial.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="abc123"'
-        }
+        response_401_initial.headers = {"x-www-authenticate": 'Digest realm="test", nonce="abc123"'}
         response_401_initial.raise_for_status = Mock()
 
         response_401_cached = Mock()
         response_401_cached.status_code = 401
-        response_401_cached.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="xyz789"'
-        }
+        response_401_cached.headers = {"x-www-authenticate": 'Digest realm="test", nonce="xyz789"'}
         response_401_cached.raise_for_status = Mock()
 
         response_200 = Mock()
@@ -165,30 +155,18 @@ class TestFroniusRequest:
         """Test that auth failure after all algorithm retries raises HTTPError."""
         response_401_initial = Mock()
         response_401_initial.status_code = 401
-        response_401_initial.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="abc123"'
-        }
-        response_401_initial.raise_for_status = Mock(
-            side_effect=requests.HTTPError("Unauthorized")
-        )
+        response_401_initial.headers = {"x-www-authenticate": 'Digest realm="test", nonce="abc123"'}
+        response_401_initial.raise_for_status = Mock(side_effect=requests.HTTPError("Unauthorized"))
 
         response_401_sha256 = Mock()
         response_401_sha256.status_code = 401
-        response_401_sha256.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="xyz789"'
-        }
-        response_401_sha256.raise_for_status = Mock(
-            side_effect=requests.HTTPError("Unauthorized")
-        )
+        response_401_sha256.headers = {"x-www-authenticate": 'Digest realm="test", nonce="xyz789"'}
+        response_401_sha256.raise_for_status = Mock(side_effect=requests.HTTPError("Unauthorized"))
 
         response_401_md5 = Mock()
         response_401_md5.status_code = 401
-        response_401_md5.headers = {
-            "x-www-authenticate": 'Digest realm="test", nonce="def456"'
-        }
-        response_401_md5.raise_for_status = Mock(
-            side_effect=requests.HTTPError("Unauthorized")
-        )
+        response_401_md5.headers = {"x-www-authenticate": 'Digest realm="test", nonce="def456"'}
+        response_401_md5.raise_for_status = Mock(side_effect=requests.HTTPError("Unauthorized"))
 
         mock_request.side_effect = [
             response_401_initial,
@@ -349,9 +327,7 @@ class TestAPIEdgeCases:
         response_401 = Mock()
         response_401.status_code = 401
         response_401.headers = {}
-        response_401.raise_for_status = Mock(
-            side_effect=requests.HTTPError("401 Unauthorized")
-        )
+        response_401.raise_for_status = Mock(side_effect=requests.HTTPError("401 Unauthorized"))
         mock_request.return_value = response_401
 
         with pytest.raises(requests.HTTPError):
@@ -461,10 +437,7 @@ class TestAPIEdgeCases:
         )
 
         call_kwargs = mock_request.call_args[1]
-        assert (
-            "headers" in call_kwargs
-            or call_kwargs.get("headers", {}).get("X-Custom") == "value"
-        )
+        assert "headers" in call_kwargs or call_kwargs.get("headers", {}).get("X-Custom") == "value"
 
     @patch("custom_components.fronius_tdc.api.requests.request")
     def test_request_different_http_methods(self, mock_request) -> None:
@@ -496,9 +469,7 @@ class TestAPIEdgeCases:
             mock_response.status_code = status
             mock_response.headers = {}
             if status >= 400:
-                mock_response.raise_for_status.side_effect = requests.HTTPError(
-                    f"{status} Error"
-                )
+                mock_response.raise_for_status.side_effect = requests.HTTPError(f"{status} Error")
             else:
                 mock_response.raise_for_status = Mock()
             mock_request.return_value = mock_response

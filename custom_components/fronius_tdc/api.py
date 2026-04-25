@@ -46,11 +46,7 @@ def fronius_request(
         return resp
 
     # Step 2: find challenge header (Fronius uses X-WWW-Authenticate)
-    challenge_header = (
-        resp.headers.get("www-authenticate")
-        or resp.headers.get("x-www-authenticate")
-        or ""
-    )
+    challenge_header = resp.headers.get("www-authenticate") or resp.headers.get("x-www-authenticate") or ""
     LOGGER.debug("Challenge header: %s", challenge_header)
 
     if not challenge_header:
@@ -60,11 +56,7 @@ def fronius_request(
     auth_headers = dict(base_kwargs.pop("headers", None) or {})
     cache_key = _auth_cache_key(url, username)
     cached_ha1_algo = _AUTH_ALGO_CACHE.get(cache_key)
-    algos = (
-        (cached_ha1_algo, *tuple(a for a in HA1_ALGOS if a != cached_ha1_algo))
-        if cached_ha1_algo
-        else HA1_ALGOS
-    )
+    algos = (cached_ha1_algo, *tuple(a for a in HA1_ALGOS if a != cached_ha1_algo)) if cached_ha1_algo else HA1_ALGOS
 
     for attempt, ha1_algo in enumerate(algos, start=1):
         authorization = _build_authorization(
@@ -78,9 +70,7 @@ def fronius_request(
 
         headers = dict(auth_headers)
         headers["Authorization"] = authorization
-        resp = requests.request(
-            method, url, headers=headers, timeout=timeout, **base_kwargs
-        )
+        resp = requests.request(method, url, headers=headers, timeout=timeout, **base_kwargs)
         LOGGER.debug(
             "Step %d (authenticated, HA1=%s) — %s %s → HTTP %s",
             attempt,
@@ -96,9 +86,7 @@ def fronius_request(
             return resp
 
         challenge_header = (
-            resp.headers.get("www-authenticate")
-            or resp.headers.get("x-www-authenticate")
-            or challenge_header
+            resp.headers.get("www-authenticate") or resp.headers.get("x-www-authenticate") or challenge_header
         )
 
     resp.raise_for_status()
@@ -117,10 +105,6 @@ def fronius_get_html(url: str, username: str, password: str, timeout: int = 15) 
     return fronius_request("GET", url, username, password, timeout=timeout).text
 
 
-def fronius_post_json(
-    url: str, username: str, password: str, payload: dict, timeout: int = 15
-) -> dict:
+def fronius_post_json(url: str, username: str, password: str, payload: dict, timeout: int = 15) -> dict:
     """Post data to the inverter, parse response as JSON."""
-    return fronius_request(
-        "POST", url, username, password, timeout=timeout, json=payload
-    ).json()
+    return fronius_request("POST", url, username, password, timeout=timeout, json=payload).json()
