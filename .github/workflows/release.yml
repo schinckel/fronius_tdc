@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -24,9 +23,10 @@ jobs:
         uses: CupOfTea696/gh-action-auto-release@v1.0.0
         with:
           title: "Release: $version"
-          tag: "$version"
+          tag: "v$semver"
           draft: false
           changelog: CHANGES.md
           changelog-entry: "$version"
+          regex: "/^Release: #{semver}$/i"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
