@@ -70,7 +70,7 @@ class TestFroniusRequest:
     @patch("custom_components.fronius_tdc.api.requests.request")
     @patch("custom_components.fronius_tdc.api._build_authorization")
     def test_retry_on_401_with_sha256_fallback(self, mock_auth, mock_request) -> None:
-        """Test that SHA-256 HA1 is retried after MD5 fails."""
+        """Test that SHA-256 HA1 is attempted first and MD5 is used on failure."""
         response_401 = Mock()
         response_401.status_code = 401
         response_401.headers = {
@@ -91,7 +91,7 @@ class TestFroniusRequest:
         response_200.raise_for_status = Mock()
 
         mock_request.side_effect = [response_401, response_401_second, response_200]
-        mock_auth.side_effect = ["Digest md5", "Digest sha256"]
+        mock_auth.side_effect = ["Digest sha256", "Digest md5"]
 
         result = fronius_request(
             "GET",
@@ -103,8 +103,8 @@ class TestFroniusRequest:
         assert result.status_code == 200
         assert mock_request.call_count == 3
         assert mock_auth.call_count == 2
-        assert mock_auth.call_args_list[0].kwargs["ha1_algo"] == "md5"
-        assert mock_auth.call_args_list[1].kwargs["ha1_algo"] == "sha256"
+        assert mock_auth.call_args_list[0].kwargs["ha1_algo"] == "sha256"
+        assert mock_auth.call_args_list[1].kwargs["ha1_algo"] == "md5"
         assert 'nonce="abc123"' in mock_auth.call_args_list[0].args[4]
         assert 'nonce="xyz789"' in mock_auth.call_args_list[1].args[4]
 
@@ -113,24 +113,35 @@ class TestFroniusRequest:
     def test_cached_algorithm_avoids_repeated_probe(
         self, mock_auth, mock_request
     ) -> None:
-        """Test that a cached HA1 algorithm is used first on a subsequent auth event."""
+        """Test that a cached HA1 algorithm is tried first and falls back on failure."""
         cache_key = ("192.168.1.1:80", "customer")
         api._AUTH_ALGO_CACHE[cache_key] = "sha256"
 
-        response_401 = Mock()
-        response_401.status_code = 401
-        response_401.headers = {
+        response_401_initial = Mock()
+        response_401_initial.status_code = 401
+        response_401_initial.headers = {
             "x-www-authenticate": 'Digest realm="test", nonce="abc123"'
         }
-        response_401.raise_for_status = Mock()
+        response_401_initial.raise_for_status = Mock()
+
+        response_401_cached = Mock()
+        response_401_cached.status_code = 401
+        response_401_cached.headers = {
+            "x-www-authenticate": 'Digest realm="test", nonce="xyz789"'
+        }
+        response_401_cached.raise_for_status = Mock()
 
         response_200 = Mock()
         response_200.status_code = 200
         response_200.text = "<response data>"
         response_200.raise_for_status = Mock()
 
-        mock_request.side_effect = [response_401, response_200]
-        mock_auth.return_value = "Digest sha256"
+        mock_request.side_effect = [
+            response_401_initial,
+            response_401_cached,
+            response_200,
+        ]
+        mock_auth.side_effect = ["Digest sha256", "Digest md5"]
 
         result = fronius_request(
             "GET",
@@ -140,9 +151,12 @@ class TestFroniusRequest:
         )
 
         assert result.status_code == 200
-        assert mock_request.call_count == 2
-        assert mock_auth.call_count == 1
-        assert mock_auth.call_args.kwargs["ha1_algo"] == "sha256"
+        assert mock_request.call_count == 3
+        assert mock_auth.call_count == 2
+        assert mock_auth.call_args_list[0].kwargs["ha1_algo"] == "sha256"
+        assert mock_auth.call_args_list[1].kwargs["ha1_algo"] == "md5"
+        assert 'nonce="abc123"' in mock_auth.call_args_list[0].args[4]
+        assert 'nonce="xyz789"' in mock_auth.call_args_list[1].args[4]
         api._AUTH_ALGO_CACHE.clear()
 
     @patch("custom_components.fronius_tdc.api.requests.request")
