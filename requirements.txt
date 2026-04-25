@@ -1,5 +1,0 @@
-colorlog==6.10.1
-homeassistant==2026.3.0b2
-pip>=26.0.1
-ruff==0.15.11
-prek==0.3.10
