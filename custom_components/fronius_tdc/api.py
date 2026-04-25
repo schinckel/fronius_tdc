@@ -12,6 +12,7 @@ from .const import LOGGER
 
 UNAUTHORIZED = 401
 _AUTH_ALGO_CACHE: dict[tuple[str, str], str] = {}
+HA1_ALGOS = ("sha256", "md5")
 
 
 def _auth_cache_key(url: str, username: str) -> tuple[str, str]:
@@ -60,9 +61,9 @@ def fronius_request(
     cache_key = _auth_cache_key(url, username)
     cached_ha1_algo = _AUTH_ALGO_CACHE.get(cache_key)
     algos = (
-        (cached_ha1_algo, *tuple(a for a in ("md5", "sha256") if a != cached_ha1_algo))
+        (cached_ha1_algo, *tuple(a for a in HA1_ALGOS if a != cached_ha1_algo))
         if cached_ha1_algo
-        else ("md5", "sha256")
+        else HA1_ALGOS
     )
 
     for attempt, ha1_algo in enumerate(algos, start=1):
