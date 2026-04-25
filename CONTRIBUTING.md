@@ -56,6 +56,8 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./config/configuration.yaml)
 file.
 
+Inside the container, you can use `scripts/setup` to install required packages; `scripts/lint` to run linting; `scripts/test` to run automated tests; and `scripts/develop` to start a running Home Assistant installation.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.

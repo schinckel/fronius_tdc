@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+python3 -m pytest \
+  --junitxml=junit.xml \
+  -o junit_family=legacy \
+  --cov=custom_components/fronius_tdc \
+  --cov-report=xml \
+  --cov-report=term-missing \
+  --cov-branch
