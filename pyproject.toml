@@ -20,3 +20,54 @@ test = [
     "pytest-cov==7.1.0",
     "pytest-mock==3.15.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=custom_components/fronius_tdc",
+    "--cov-report=xml",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-report=annotate",
+    "--cov-report=term",
+    "--cov-branch",
+    "--junitxml=junit.xml",
+    "-o",
+    "junit_family=legacy"
+]
+filterwarnings = [
+    "error::DeprecationWarning",
+    "error::Warning",
+    "ignore:Inheritance class HomeAssistantApplication from web.Application is discouraged:DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "D203", # no-blank-line-before-class (incompatible with formatter)
+    "D212", # multi-line-summary-first-line (incompatible with formatter)
+    "COM812", # incompatible with formatter
+    "ISC001", # incompatible with formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D102","S101","SLF001","PLR2004","ANN"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.ruff.format]
+preview = true

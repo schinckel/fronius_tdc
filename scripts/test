@@ -4,10 +4,4 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-uv run pytest \
-  --junitxml=junit.xml \
-  -o junit_family=legacy \
-  --cov=custom_components/fronius_tdc \
-  --cov-report=xml \
-  --cov-report=term-missing \
-  --cov-branch
+uv run -m pytest
