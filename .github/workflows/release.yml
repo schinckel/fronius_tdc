@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'custom_components/fronius_tdc/manifest.json'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Get version from manifest
+        run: echo "VERSION=$(jq -r .version custom_components/fronius_tdc/manifest.json)" >> $GITHUB_ENV
+
+      - name: Create and push tag
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag v${{ env.VERSION }}
+          git push origin v${{ env.VERSION }}
+
+      - name: Create Release
+        uses: CupOfTea696/gh-action-auto-release@v1.0.0
+        with:
+          title: "Release: ${{ github.event.inputs.version || env.VERSION || github.ref_name }}"
+          tag: "v${{ github.event.inputs.version || env.VERSION || github.ref_name }}"
+          draft: false
+          changelog: CHANGES.md
+          changelog-entry: "${{ github.event.inputs.version || env.VERSION || github.ref_name }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
