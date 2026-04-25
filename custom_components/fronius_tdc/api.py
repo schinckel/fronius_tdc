@@ -102,7 +102,9 @@ def fronius_request(
         )
 
     resp.raise_for_status()
-    return resp
+    # This next line will never be reached because the above line will raise,
+    # but the linting tools don't know that, and will complain about missing return.
+    return resp  # pragma: no cover
 
 
 def fronius_get_json(url: str, username: str, password: str, timeout: int = 15) -> dict:

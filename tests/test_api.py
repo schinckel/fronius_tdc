@@ -160,6 +160,55 @@ class TestFroniusRequest:
         api._AUTH_ALGO_CACHE.clear()
 
     @patch("custom_components.fronius_tdc.api.requests.request")
+    @patch("custom_components.fronius_tdc.api._build_authorization")
+    def test_auth_failure_after_all_retries(self, mock_auth, mock_request) -> None:
+        """Test that auth failure after all algorithm retries raises HTTPError."""
+        response_401_initial = Mock()
+        response_401_initial.status_code = 401
+        response_401_initial.headers = {
+            "x-www-authenticate": 'Digest realm="test", nonce="abc123"'
+        }
+        response_401_initial.raise_for_status = Mock(
+            side_effect=requests.HTTPError("Unauthorized")
+        )
+
+        response_401_sha256 = Mock()
+        response_401_sha256.status_code = 401
+        response_401_sha256.headers = {
+            "x-www-authenticate": 'Digest realm="test", nonce="xyz789"'
+        }
+        response_401_sha256.raise_for_status = Mock(
+            side_effect=requests.HTTPError("Unauthorized")
+        )
+
+        response_401_md5 = Mock()
+        response_401_md5.status_code = 401
+        response_401_md5.headers = {
+            "x-www-authenticate": 'Digest realm="test", nonce="def456"'
+        }
+        response_401_md5.raise_for_status = Mock(
+            side_effect=requests.HTTPError("Unauthorized")
+        )
+
+        mock_request.side_effect = [
+            response_401_initial,
+            response_401_sha256,
+            response_401_md5,
+        ]
+        mock_auth.side_effect = ["Digest sha256", "Digest md5"]
+
+        with pytest.raises(requests.HTTPError):
+            fronius_request(
+                "GET",
+                "http://192.168.1.1:80/api/test",
+                "customer",
+                "secret",
+            )
+
+        assert mock_request.call_count == 3
+        assert mock_auth.call_count == 2
+
+    @patch("custom_components.fronius_tdc.api.requests.request")
     def test_http_error_raised(self, mock_request) -> None:
         """Test that HTTP errors are raised."""
         mock_response = Mock()

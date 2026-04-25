@@ -25,8 +25,8 @@ def _parse_challenge(header: str) -> dict[str, str]:
 
     for match in re.finditer(r'(\w+)=(?:(?:"([^"]*)")|([\w./+-]+))', header):
         key = match.group(1).lower()
-        value = match.group(2) if match.group(2) is not None else match.group(3)
-        if value is not None:
+        value = match.group(2) or match.group(3)
+        if value:
             challenge[key] = value
 
     _LOGGER.debug("Parsed digest challenge: %s", challenge)
