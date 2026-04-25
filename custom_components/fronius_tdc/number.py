@@ -44,9 +44,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up number entities for battery configuration."""
-    coordinator: FroniusBatteriesCoordinator = (
-        hass.data[DOMAIN].get("batteries_coordinator", {}).get(entry.entry_id)
-    )
+    coordinator: FroniusBatteriesCoordinator = hass.data[DOMAIN].get("batteries_coordinator", {}).get(entry.entry_id)
 
     if not coordinator:
         _LOGGER.warning(
@@ -59,16 +57,10 @@ async def async_setup_entry(
     _LOGGER.debug("Battery coordinator data available: %s", coordinator.data)
 
     # Find all numeric keys for number entities
-    numeric_keys = [
-        key
-        for key, platform_type in BATTERY_CONFIG_KEYS.items()
-        if platform_type == "number"
-    ]
+    numeric_keys = [key for key, platform_type in BATTERY_CONFIG_KEYS.items() if platform_type == "number"]
 
     number_entities = [
-        FroniusBatteryNumber(coordinator, entry, key)
-        for key in numeric_keys
-        if key in (coordinator.data or {})
+        FroniusBatteryNumber(coordinator, entry, key) for key in numeric_keys if key in (coordinator.data or {})
     ]
     _LOGGER.debug(
         "Creating %d battery number entities: %s",
@@ -78,9 +70,7 @@ async def async_setup_entry(
     async_add_entities(number_entities)
 
 
-class FroniusBatteryNumber(
-    CoordinatorEntity[FroniusBatteriesCoordinator], NumberEntity
-):
+class FroniusBatteryNumber(CoordinatorEntity[FroniusBatteriesCoordinator], NumberEntity):
     """Number entity for a numeric battery configuration setting."""
 
     def __init__(

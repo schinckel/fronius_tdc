@@ -51,9 +51,7 @@ async def async_setup_entry(
         logger=LOGGER,
         config_entry=entry,
     )
-    hass.data[DOMAIN].setdefault("batteries_coordinator", {})[entry.entry_id] = (
-        batteries_coordinator
-    )
+    hass.data[DOMAIN].setdefault("batteries_coordinator", {})[entry.entry_id] = batteries_coordinator
     await batteries_coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

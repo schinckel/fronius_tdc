@@ -280,9 +280,7 @@ class TestIntegrationLifecycle:
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_full_setup_unload_cycle(
-        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
-    ):
+    async def test_full_setup_unload_cycle(self, mock_tdc_coordinator_class, mock_batteries_coordinator_class):
         """Test complete setup and unload cycle."""
         mock_tdc = AsyncMock()
         mock_tdc.async_config_entry_first_refresh = AsyncMock()
@@ -314,9 +312,7 @@ class TestIntegrationLifecycle:
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.FroniusBatteriesCoordinator")
     @patch("custom_components.fronius_tdc.FroniusTDCCoordinator")
-    async def test_setup_reload_cycle(
-        self, mock_tdc_coordinator_class, mock_batteries_coordinator_class
-    ):
+    async def test_setup_reload_cycle(self, mock_tdc_coordinator_class, mock_batteries_coordinator_class):
         """Test setup followed by reload."""
         mock_tdc = AsyncMock()
         mock_tdc.async_config_entry_first_refresh = AsyncMock()

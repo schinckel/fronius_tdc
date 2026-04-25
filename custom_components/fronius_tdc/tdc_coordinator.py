@@ -51,9 +51,7 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
         }
     """
 
-    def __init__(
-        self, hass: HomeAssistant, logger: logging.Logger, config_entry: Any
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, logger: logging.Logger, config_entry: Any) -> None:
         """Initialize the coordinator and parse connection parameters."""
         super().__init__(
             hass,
@@ -76,9 +74,7 @@ class FroniusTDCCoordinator(DataUpdateCoordinator[list[dict]]):
     # ------------------------------------------------------------------
 
     def _blocking_get(self) -> list[dict]:
-        raw = fronius_get_json(
-            self._url, self._username, self._password, REQUEST_TIMEOUT
-        )
+        raw = fronius_get_json(self._url, self._username, self._password, REQUEST_TIMEOUT)
         schedules = raw.get("timeofuse", [])
         return [_strip_meta(s) for s in schedules]
 

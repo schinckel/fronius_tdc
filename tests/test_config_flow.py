@@ -125,9 +125,7 @@ class TestBlueprintFlowHandler:
 
         await flow_handler.async_step_user(user_input)
 
-        flow_handler.async_set_unique_id.assert_called_once_with(
-            "fronius_tdc_192.168.1.1"
-        )
+        flow_handler.async_set_unique_id.assert_called_once_with("fronius_tdc_192.168.1.1")
         flow_handler.async_create_entry.assert_called_once()
 
     @pytest.mark.asyncio
@@ -145,9 +143,7 @@ class TestBlueprintFlowHandler:
         }
 
         flow_handler.hass = AsyncMock()
-        flow_handler.hass.async_add_executor_job = AsyncMock(
-            return_value="invalid_auth"
-        )
+        flow_handler.hass.async_add_executor_job = AsyncMock(return_value="invalid_auth")
 
         await flow_handler.async_step_user(user_input)
 
@@ -157,9 +153,7 @@ class TestBlueprintFlowHandler:
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.config_flow._test_connection_blocking")
-    async def test_async_step_user_cannot_connect(
-        self, mock_test, flow_handler
-    ) -> None:
+    async def test_async_step_user_cannot_connect(self, mock_test, flow_handler) -> None:
         """Test config flow when cannot connect."""
         mock_test.return_value = "cannot_connect"
         flow_handler.async_show_form = Mock()
@@ -172,9 +166,7 @@ class TestBlueprintFlowHandler:
         }
 
         flow_handler.hass = AsyncMock()
-        flow_handler.hass.async_add_executor_job = AsyncMock(
-            return_value="cannot_connect"
-        )
+        flow_handler.hass.async_add_executor_job = AsyncMock(return_value="cannot_connect")
 
         await flow_handler.async_step_user(user_input)
 

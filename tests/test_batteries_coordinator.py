@@ -127,16 +127,12 @@ class TestFroniusBatteriesCoordinator:
 
     @pytest.mark.asyncio
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_post_json")
-    async def test_async_set_switch_regression_positional_blocking_post(
-        self, mock_post, coordinator
-    ) -> None:
+    async def test_async_set_switch_regression_positional_blocking_post(self, mock_post, coordinator) -> None:
         """Regression: executor passes positional args to _blocking_post."""
         coordinator.data = {"HYB_EVU_CHARGEFROMGRID": False}
         coordinator.async_refresh = AsyncMock()
 
-        with patch.object(
-            coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-        ) as mock_executor:
+        with patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor:
             mock_executor.side_effect = lambda fn, *args: fn(*args)
 
             await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
@@ -162,9 +158,7 @@ class TestFroniusBatteriesCoordinator:
         assert "_Meta" not in result
 
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_get_json")
-    def test_blocking_get_handles_read_not_supported(
-        self, mock_get, coordinator
-    ) -> None:
+    def test_blocking_get_handles_read_not_supported(self, mock_get, coordinator) -> None:
         """Test that _blocking_get gracefully handles read not supported (404)."""
         error = requests.HTTPError("404 Not Found")
         mock_get.side_effect = error
@@ -201,9 +195,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post") as mock_post,
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
@@ -220,9 +212,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post") as mock_post,
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_number("HYB_EM_POWER", 5000)
@@ -239,9 +229,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post") as mock_post,
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_select("HYB_EM_MODE", 1)
@@ -252,9 +240,7 @@ class TestFroniusBatteriesCoordinator:
 
     def test_test_connection_blocking(self, coordinator) -> None:
         """Test test_connection_blocking method."""
-        with patch.object(
-            coordinator, "_blocking_get", return_value={"HYB_EVU_CHARGEFROMGRID": True}
-        ):
+        with patch.object(coordinator, "_blocking_get", return_value={"HYB_EVU_CHARGEFROMGRID": True}):
             result = coordinator.test_connection_blocking()
             assert result == {"HYB_EVU_CHARGEFROMGRID": True}
 
@@ -270,9 +256,7 @@ class TestFroniusBatteriesCoordinator:
                 "_blocking_post",
                 side_effect=requests.ConnectionError("Connection error"),
             ),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
 
@@ -293,9 +277,7 @@ class TestFroniusBatteriesCoordinator:
                 "_blocking_post",
                 side_effect=requests.Timeout("Request timeout"),
             ),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
 
@@ -316,9 +298,7 @@ class TestFroniusBatteriesCoordinator:
                 "_blocking_post",
                 side_effect=requests.HTTPError("401 Unauthorized"),
             ),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
 
@@ -335,9 +315,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post"),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_switch("HYB_EVU_CHARGEFROMGRID", value=True)
@@ -353,9 +331,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post"),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_number("HYB_EM_POWER", 5000)
@@ -371,9 +347,7 @@ class TestFroniusBatteriesCoordinator:
 
         with (
             patch.object(coordinator, "_blocking_post"),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
             await coordinator.async_set_select("HYB_EM_MODE", 1)
@@ -390,9 +364,7 @@ class TestFroniusBatteriesCoordinator:
                 "_blocking_get",
                 side_effect=requests.ConnectionError("Connection error"),
             ),
-            patch.object(
-                coordinator.hass, "async_add_executor_job", new_callable=AsyncMock
-            ) as mock_executor,
+            patch.object(coordinator.hass, "async_add_executor_job", new_callable=AsyncMock) as mock_executor,
         ):
             mock_executor.side_effect = lambda fn, *args: fn(*args)
 
@@ -402,9 +374,7 @@ class TestFroniusBatteriesCoordinator:
             assert "Cannot reach Fronius inverter" in str(exc_info.value)
 
     @patch("custom_components.fronius_tdc.batteries_coordinator.fronius_get_json")
-    def test_blocking_get_with_connection_error_raises(
-        self, mock_get, coordinator
-    ) -> None:
+    def test_blocking_get_with_connection_error_raises(self, mock_get, coordinator) -> None:
         """Test _blocking_get raises ConnectionError."""
         mock_get.side_effect = requests.ConnectionError("Cannot reach host")
 
