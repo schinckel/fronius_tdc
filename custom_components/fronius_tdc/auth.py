@@ -11,12 +11,9 @@ Fronius Gen24 quirks:
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import re
 from urllib.parse import urlparse
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _parse_challenge(header: str) -> dict[str, str]:
@@ -29,7 +26,6 @@ def _parse_challenge(header: str) -> dict[str, str]:
         if value:
             challenge[key] = value
 
-    _LOGGER.debug("Parsed digest challenge: %s", challenge)
     return challenge
 
 
@@ -59,14 +55,6 @@ def _build_authorization(  # NOQA: PLR0913
     nonce = challenge.get("nonce", "")
     qop_opts = challenge.get("qop", "")
 
-    _LOGGER.debug(
-        "Digest params — realm=%r nonce=%r qop=%r ha1_algo=%s",
-        realm,
-        nonce,
-        qop_opts,
-        ha1_algo,
-    )
-
     parsed_url = urlparse(url)
     uri = parsed_url.path or "/"
     if parsed_url.query:
@@ -80,8 +68,6 @@ def _build_authorization(  # NOQA: PLR0913
 
     ha1 = (md5 if ha1_algo == "md5" else sha256)(f"{username}:{realm}:{password}")
     ha2 = sha256(f"{method.upper()}:{uri}")
-
-    _LOGGER.debug("HA1(%s)=%s  HA2(sha256)=%s  uri=%r", ha1_algo, ha1, ha2, uri)
 
     qop_values = [opt.strip() for opt in qop_opts.split(",") if opt.strip()]
     if "auth" in qop_values:
@@ -97,5 +83,4 @@ def _build_authorization(  # NOQA: PLR0913
         response = sha256(f"{ha1}:{nonce}:{ha2}")
         header = f'Digest username="{username}", realm="{realm}", nonce="{nonce}", uri="{uri}", response="{response}"'
 
-    _LOGGER.debug("Built Authorization header (%s): %s", ha1_algo, header)
     return header
