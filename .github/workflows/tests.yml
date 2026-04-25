@@ -22,14 +22,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r test-requirements.txt
+        run: scripts/setup
 
       - name: Run tests with pytest
-        run: |
-          pytest --junitxml=junit.xml -o junit_family=legacy --cov=custom_components/fronius_tdc --cov-report=xml --cov-report=term-missing --cov-branch
+        run: scripts/test
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v6
