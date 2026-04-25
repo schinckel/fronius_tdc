@@ -1,0 +1,22 @@
+[project]
+name = "fronius-tdc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14.2"
+dependencies = [
+    "colorlog==6.10.1",
+    "homeassistant==2026.3.0b2",
+]
+
+[dependency-groups]
+dev = [
+    "prek==0.3.10",
+    "ruff==0.15.11",
+]
+test = [
+    "pytest==9.0.3",
+    "pytest-asyncio==1.3.0",
+    "pytest-cov==7.1.0",
+    "pytest-mock==3.15.1",
+]

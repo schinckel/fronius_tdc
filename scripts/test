@@ -4,7 +4,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-python3 -m pytest \
+uv run pytest \
   --junitxml=junit.xml \
   -o junit_family=legacy \
   --cov=custom_components/fronius_tdc \
