@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 - 2026-04-25
+
+Internal cleanup and tooling changes.
+Automated release process.
+
 ## 1.2.0 - 2026-04-25
 
 Support both authentication algorithms, and cache which one was last used.
