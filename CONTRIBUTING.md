@@ -18,7 +18,20 @@ Pull requests are the best way to propose changes to the codebase.
 3. Make sure your code lints (using `scripts/lint`).
 4. Test you contribution.
 5. Issue that pull request!
+## Releases
 
+Releases are automated using GitHub Actions with the auto-release action.
+
+To create a new release:
+
+1. Update the version in `custom_components/fronius_tdc/manifest.json` to match the new version.
+2. Add a new entry to `CHANGES.md` in the format `## X.Y.Z - YYYY-MM-DD` with the changelog content below it.
+3. Commit these changes to the `main` branch.
+4. Create and push a tag in the format `vX.Y.Z` (e.g., `git tag v1.2.1 && git push origin v1.2.1`).
+
+The release workflow will automatically create a GitHub Release using the changelog entry for that version.
+
+For manual releases or testing the workflow, use the `workflow_dispatch` trigger in the GitHub Actions tab, providing the version number.
 ## Any contributions you make will be under the MIT Software License
 
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
