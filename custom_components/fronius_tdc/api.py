@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -10,6 +11,12 @@ from .auth import _build_authorization
 from .const import LOGGER
 
 UNAUTHORIZED = 401
+_AUTH_ALGO_CACHE: dict[tuple[str, str], str] = {}
+
+
+def _auth_cache_key(url: str, username: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    return parsed.netloc, username
 
 
 def fronius_request(
@@ -48,9 +55,17 @@ def fronius_request(
     if not challenge_header:
         resp.raise_for_status()
 
-    # Step 3: try digest auth using both HA1 algorithms in order
-    auth_headers = dict(kwargs.get("headers") or {})
-    for attempt, ha1_algo in enumerate(("md5", "sha256"), start=1):
+    base_kwargs = dict(kwargs)
+    auth_headers = dict(base_kwargs.pop("headers", None) or {})
+    cache_key = _auth_cache_key(url, username)
+    cached_ha1_algo = _AUTH_ALGO_CACHE.get(cache_key)
+    algos = (
+        (cached_ha1_algo, *tuple(a for a in ("md5", "sha256") if a != cached_ha1_algo))
+        if cached_ha1_algo
+        else ("md5", "sha256")
+    )
+
+    for attempt, ha1_algo in enumerate(algos, start=1):
         authorization = _build_authorization(
             method,
             url,
@@ -62,7 +77,9 @@ def fronius_request(
 
         headers = dict(auth_headers)
         headers["Authorization"] = authorization
-        resp = requests.request(method, url, headers=headers, timeout=timeout, **kwargs)
+        resp = requests.request(
+            method, url, headers=headers, timeout=timeout, **base_kwargs
+        )
         LOGGER.debug(
             "Step %d (authenticated, HA1=%s) — %s %s → HTTP %s",
             attempt,
@@ -73,6 +90,7 @@ def fronius_request(
         )
 
         if resp.status_code != UNAUTHORIZED:
+            _AUTH_ALGO_CACHE[cache_key] = ha1_algo
             resp.raise_for_status()
             return resp
 
