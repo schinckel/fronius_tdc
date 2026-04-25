@@ -48,23 +48,40 @@ def fronius_request(
     if not challenge_header:
         resp.raise_for_status()
 
-    # Step 3: compute Authorization
-    authorization = _build_authorization(
-        method,
-        url,
-        username,
-        password,
-        challenge_header,
-    )
+    # Step 3: try digest auth using both HA1 algorithms in order
+    auth_headers = dict(kwargs.get("headers") or {})
+    for attempt, ha1_algo in enumerate(("md5", "sha256"), start=1):
+        authorization = _build_authorization(
+            method,
+            url,
+            username,
+            password,
+            challenge_header,
+            ha1_algo=ha1_algo,
+        )
 
-    # Step 4: retry with Authorization header
-    headers = dict(kwargs.pop("headers", None) or {})
-    headers["Authorization"] = authorization
-    resp = requests.request(method, url, headers=headers, timeout=timeout, **kwargs)
-    LOGGER.debug(
-        "Step 2 (authenticated) — %s %s → HTTP %s", method, url, resp.status_code
-    )
-    LOGGER.debug("Step 2 response body: %s", resp.text[:800])
+        headers = dict(auth_headers)
+        headers["Authorization"] = authorization
+        resp = requests.request(method, url, headers=headers, timeout=timeout, **kwargs)
+        LOGGER.debug(
+            "Step %d (authenticated, HA1=%s) — %s %s → HTTP %s",
+            attempt,
+            ha1_algo,
+            method,
+            url,
+            resp.status_code,
+        )
+
+        if resp.status_code != UNAUTHORIZED:
+            resp.raise_for_status()
+            return resp
+
+        challenge_header = (
+            resp.headers.get("www-authenticate")
+            or resp.headers.get("x-www-authenticate")
+            or challenge_header
+        )
+
     resp.raise_for_status()
     return resp
 
